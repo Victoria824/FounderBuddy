@@ -3,7 +3,7 @@
     "dependencies": ["./src"],
     "graphs": {
         "research_assistant": "./src/agents/research_assistant.py:research_assistant",
-        "mission_pitch_agent": "./src/agents/mission_pitch_agent.py:mission_pitch_agent"
+        "value_canvas": "./src/agents/value_canvas_agent.py:graph"
     },
     "env": "./.env"
 }

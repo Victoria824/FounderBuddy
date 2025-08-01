@@ -9,9 +9,9 @@ from agents.command_agent import command_agent
 from agents.interrupt_agent import interrupt_agent
 from agents.knowledge_base_agent import kb_agent
 from agents.langgraph_supervisor_agent import langgraph_supervisor_agent
-from agents.mission_pitch_agent import mission_pitch_agent
 from agents.rag_assistant import rag_assistant
 from agents.research_assistant import research_assistant
+from agents.value_canvas_agent import graph as value_canvas_agent
 from schema import AgentInfo
 
 DEFAULT_AGENT = "research-assistant"
@@ -46,9 +46,9 @@ agents: dict[str, Agent] = {
         description="A retrieval-augmented generation agent using Amazon Bedrock Knowledge Base",
         graph=kb_agent,
     ),
-    "mission-pitch-agent": Agent(
-        description="Professional business storytelling assistant for developing Mission Pitch - a 6-step framework connecting origin, mission and vision in under 2 minutes",
-        graph=mission_pitch_agent,
+    "value-canvas": Agent(
+        description="A Value Canvas creation agent that guides users through building powerful marketing frameworks",
+        graph=value_canvas_agent,
     ),
 }
 
