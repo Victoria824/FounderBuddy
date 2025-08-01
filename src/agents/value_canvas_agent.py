@@ -19,6 +19,7 @@ from agents.value_canvas_models import (
     RouterDirective,
     SectionID,
     SectionStatus,
+    ValueCanvasData,
     ValueCanvasState,
 )
 from agents.value_canvas_prompts import (
@@ -62,6 +63,41 @@ memory_updater_tool_node = ToolNode(memory_updater_tools)
 implementation_tool_node = ToolNode(implementation_tools)
 
 
+async def initialize_node(state: ValueCanvasState, config: RunnableConfig) -> ValueCanvasState:
+    """
+    Initialize node that ensures all required state fields are present.
+    This is the first node in the graph to handle LangGraph Studio's incomplete state.
+    """
+    logger.info("Initialize node - Setting up default values")
+    
+    # Ensure all required fields have default values
+    if "user_id" not in state or not state["user_id"]:
+        state["user_id"] = "studio-user"
+    if "doc_id" not in state or not state["doc_id"]:
+        state["doc_id"] = "studio-doc"
+    if "current_section" not in state:
+        state["current_section"] = SectionID.INTERVIEW
+    if "router_directive" not in state:
+        state["router_directive"] = RouterDirective.NEXT
+    if "finished" not in state:
+        state["finished"] = False
+    if "section_states" not in state:
+        state["section_states"] = {}
+    if "canvas_data" not in state:
+        state["canvas_data"] = ValueCanvasData()
+    if "short_memory" not in state:
+        state["short_memory"] = []
+    if "error_count" not in state:
+        state["error_count"] = 0
+    if "last_error" not in state:
+        state["last_error"] = None
+    if "messages" not in state:
+        state["messages"] = []
+    
+    logger.info(f"Initialize complete - User: {state['user_id']}, Doc: {state['doc_id']}")
+    return state
+
+
 async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueCanvasState:
     """
     Router node that handles navigation and context loading.
@@ -72,7 +108,22 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     - Call get_context when changing sections
     - Check for completion and set finished flag
     """
-    logger.info(f"Router node - Current section: {state['current_section']}, Directive: {state['router_directive']}")
+    # Ensure essential keys exist by injecting default values defined in ValueCanvasState.
+    # This lets users start a new thread in LangGraph Studio without manually supplying state.
+    state.setdefault("user_id", "studio-user")
+    state.setdefault("doc_id", "studio-doc")
+    state.setdefault("current_section", SectionID.INTERVIEW)
+    state.setdefault("router_directive", RouterDirective.NEXT)
+    state.setdefault("finished", False)
+    state.setdefault("section_states", {})
+    state.setdefault("canvas_data", ValueCanvasData())
+    state.setdefault("messages", [])
+    state.setdefault("short_memory", [])
+    state.setdefault("awaiting_user_input", False)
+
+    logger.info(
+        f"Router node - Current section: {state['current_section']}, Directive: {state['router_directive']}"
+    )
     
     # Process router directive
     directive = state.get("router_directive", RouterDirective.STAY)
@@ -126,9 +177,6 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
             state["last_error"] = f"Invalid section ID: {section_id}"
             state["error_count"] += 1
     
-    # Reset router directive
-    state["router_directive"] = RouterDirective.STAY
-    
     return state
 
 
@@ -146,106 +194,126 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     logger.info(f"Chat agent node - Section: {state['current_section']}")
     
     # Get LLM - no tools for chat agent per design doc
-    llm = get_model()
+    llm = get_model(config["configurable"].get("model", settings.DEFAULT_MODEL))
     
-    # Build messages
     messages: List[BaseMessage] = []
-    
-    # Add system prompt from context packet
+    last_human_msg: Optional[HumanMessage] = None
+
+    # 1) Hard system instruction per design doc – MUST output pure JSON.
+    json_schema_instruction = (
+        "You are Value Canvas Chat Agent. Respond ONLY with valid JSON matching this schema: "
+        '{"reply": "string", "router_directive": "stay|next|modify:<section_id>", '
+        '"score": "integer|null", "section_update": "object|null"} '
+        "Do NOT output markdown, code fences, or any extra commentary."
+    )
+    messages.append(SystemMessage(content=json_schema_instruction))
+    # If awaiting rating (router stays and user just provided info), instruct LLM to produce summary first
+    if state.get("awaiting_user_input", False):
+        summary_instruction = (
+            "When responding, begin with a concise summary (in 3-5 bullet points) of the user's latest answers for the current section, "
+            "then ask them to rate their satisfaction with the summary on a 0-5 scale."
+        )
+        messages.append(SystemMessage(content=summary_instruction))
+
+    # 2) Section-specific system prompt from context packet
     if state.get("context_packet"):
-        messages.append(SystemMessage(content=state["context_packet"]["system_prompt"]))
-    
-    # Add conversation history (limited to recent messages)
-    messages.extend(state.get("short_memory", [])[-10:])  # Keep last 10 messages
-    
-    # Add current user message
+        messages.append(SystemMessage(content=state["context_packet"].system_prompt))
+
+    # 3) Recent conversation memory
+    messages.extend(state.get("short_memory", [])[-10:])
+
+    # 4) Last human message (if any and agent hasn't replied yet)
     if state.get("messages"):
-        last_message = state["messages"][-1]
-        if isinstance(last_message, HumanMessage):
-            messages.append(last_message)
-    
-    # Generate response
+        _last_msg = state["messages"][-1]
+        if isinstance(_last_msg, HumanMessage):
+            messages.append(_last_msg)
+            last_human_msg = _last_msg
+
     try:
-        response = await llm.ainvoke(messages)
-        
-        # Parse structured output
-        try:
-            # Extract JSON from the response
-            content = response.content
-            if isinstance(content, str):
-                # Clean up the content to extract JSON
-                # Remove markdown code blocks if present
-                content = content.strip()
-                if content.startswith("```json"):
-                    content = content[7:]  # Remove ```json
-                if content.startswith("```"):
-                    content = content[3:]  # Remove ```
-                if content.endswith("```"):
-                    content = content[:-3]  # Remove trailing ```
-                
-                # Find JSON object
-                start = content.find("{")
-                end = content.rfind("}") + 1
-                
+        max_attempts = 2
+        parsed_successfully = False
+        output_data = None
+        for attempt in range(max_attempts):
+            response = await llm.ainvoke(messages)
+            content = response.content if hasattr(response, "content") else response
+
+            # Attempt to parse JSON as below (reuse existing logic in local helper)
+            def _extract_json(text: str):
+                txt = text.strip()
+                if txt.startswith("```json"):
+                    txt = txt[7:]
+                if txt.startswith("```"):
+                    txt = txt[3:]
+                if txt.endswith("```"):
+                    txt = txt[:-3]
+                start = txt.find("{")
+                end = txt.rfind("}") + 1
                 if start >= 0 and end > start:
-                    json_str = content[start:end]
+                    return txt[start:end]
+                return None
+
+            json_str = _extract_json(content) if isinstance(content, str) else None
+            if json_str:
+                try:
                     output_data = json.loads(json_str)
-                    
-                    # Ensure all required fields exist
-                    if "reply" not in output_data:
-                        output_data["reply"] = "I'm processing your request..."
-                    if "router_directive" not in output_data:
-                        output_data["router_directive"] = "stay"
-                    if "score" not in output_data:
-                        output_data["score"] = None
-                    if "section_update" not in output_data:
-                        output_data["section_update"] = None
-                    
-                    # Create ChatAgentOutput
-                    agent_output = ChatAgentOutput(**output_data)
-                    state["agent_output"] = agent_output
-                    
-                    # Update state based on output
-                    state["router_directive"] = agent_output.router_directive
-                    
-                    # Note: save_section will be handled by memory_updater node according to design doc
-                    
-                    # Add AI response to messages
-                    state["messages"].append(AIMessage(content=agent_output.reply))
-                    
-                    # Update short memory
-                    state["short_memory"] = messages[-8:] + [
-                        last_message if isinstance(last_message, HumanMessage) else HumanMessage(content=""),
-                        AIMessage(content=agent_output.reply)
-                    ]
-                else:
-                    raise ValueError("No JSON object found in response")
-            else:
-                raise ValueError("Response content is not a string")
-                
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"Failed to parse structured output: {e}\nResponse: {content}")
-            # Create a default response
-            default_output = ChatAgentOutput(
-                reply="I apologize, but I had trouble formatting my response. Let me try again. Could you please repeat your last message?",
-                router_directive="stay",
-                score=None,
-                section_update=None
+                    parsed_successfully = True
+                    break
+                except json.JSONDecodeError:
+                    pass
+
+            # If first attempt failed, add system reprimand and retry
+            if attempt == 0:
+                messages.append(SystemMessage(content="Your last output was not valid JSON. Return ONLY the JSON object – no markdown, no commentary."))
+
+        if not parsed_successfully:
+            raise ValueError("Failed to get valid JSON from LLM after retries")
+
+        # Ensure mandatory keys present
+        output_data.setdefault("reply", "I'm processing your request...")
+        output_data.setdefault("router_directive", "stay")
+        output_data.setdefault("score", None)
+        output_data.setdefault("section_update", None)
+
+        agent_output = ChatAgentOutput(**output_data)
+        state["agent_output"] = agent_output
+
+        # Determine router directive based on score, per design doc
+        if agent_output.score is not None:
+            state["router_directive"] = (
+                RouterDirective.NEXT if agent_output.score >= 3 else RouterDirective.STAY
             )
-            state["agent_output"] = default_output
-            state["router_directive"] = "stay"
-            state["messages"].append(AIMessage(content=default_output.reply))
-            state["short_memory"] = messages[-8:] + [AIMessage(content=default_output.reply)]
-            
+        else:
+            # Fallback to value supplied by model (may be stay/next/modify)
+            state["router_directive"] = agent_output.router_directive
+
+        # Add AI reply to conversation history
+        # If we expect user input next, mark flag
+        state["awaiting_user_input"] = (state["router_directive"] == RouterDirective.STAY)
+
+        # Add AI reply to conversation history
+        state["messages"].append(AIMessage(content=agent_output.reply))
+
+        # Update short-term memory (last 10 exchanges)
+        base_mem = state.get("short_memory", [])[-8:]
+        if last_human_msg is not None:
+            base_mem.append(last_human_msg)
+        base_mem.append(AIMessage(content=agent_output.reply))
+        state["short_memory"] = base_mem
+
     except Exception as e:
-        logger.error(f"Error in chat agent: {e}")
-        state["last_error"] = str(e)
-        state["error_count"] += 1
-        
-        # Add error message
-        error_msg = AIMessage(content=f"I encountered an error: {str(e)}. Let me try again.")
-        state["messages"].append(error_msg)
-    
+        logger.error(f"Failed to parse structured output: {e}\nResponse: {response.content if 'response' in locals() else ''}")
+        default_output = ChatAgentOutput(
+            reply="Sorry, I encountered a formatting error. Could you rephrase?",
+            router_directive="stay",
+            score=None,
+            section_update=None,
+        )
+        state["agent_output"] = default_output
+        state["router_directive"] = "stay"
+        state["messages"].append(AIMessage(content=default_output.reply))
+        state["awaiting_user_input"] = True
+        state["messages"].append(AIMessage(content=default_output.reply))
+        state.setdefault("short_memory", []).append(AIMessage(content=default_output.reply))
     return state
 
 
@@ -261,8 +329,15 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
     """
     logger.info("Memory updater node")
     
-    # Update section state if we have agent output with section update
-    if state.get("agent_output") and state["agent_output"].section_update:
+    agent_out = state.get("agent_output")
+
+    # Decide status based on score
+    def _status_from_score(score):
+        if score is not None and score >= 3:
+            return SectionStatus.DONE
+        return SectionStatus.IN_PROGRESS
+
+    if agent_out and agent_out.section_update:
         section_id = state["current_section"].value
         
         # Save to database using save_section tool
@@ -270,27 +345,30 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             "user_id": state["user_id"],
             "doc_id": state["doc_id"],
             "section_id": section_id,
-            "content": state["agent_output"].section_update.model_dump(),
-            "score": state["agent_output"].score,
-            "status": SectionStatus.DONE if state["agent_output"].score and state["agent_output"].score >= 3 else SectionStatus.IN_PROGRESS,
+            "content": agent_out.section_update.model_dump(),
+            "score": agent_out.score,
+            "status": _status_from_score(agent_out.score),
         })
         
         # Update local state
         state["section_states"][section_id] = {
             "section_id": section_id,
-            "content": state["agent_output"].section_update.model_dump(),
-            "score": state["agent_output"].score,
-            "status": SectionStatus.DONE if state["agent_output"].score and state["agent_output"].score >= 3 else SectionStatus.IN_PROGRESS,
+            "content": agent_out.section_update.model_dump(),
+            "score": agent_out.score,
+            "status": _status_from_score(agent_out.score),
         }
         
         # Extract plain text and update canvas data
         # This would parse the content and update specific fields in canvas_data
         # For example, if section is ICP, extract icp_nickname, etc.
         
-    # Trim short memory if too long (keep last 20 messages)
-    if len(state.get("short_memory", [])) > 20:
-        state["short_memory"] = state["short_memory"][-20:]
-    
+    # Even if there is no section_update (评分轮)，也要更新分数与状态
+    if agent_out and not agent_out.section_update:
+        section_id = state["current_section"].value
+        state["section_states"].setdefault(section_id, {})
+        state["section_states"][section_id]["score"] = agent_out.score
+        state["section_states"][section_id]["status"] = _status_from_score(agent_out.score)
+
     return state
 
 
@@ -329,10 +407,36 @@ async def implementation_node(state: ValueCanvasState, config: RunnableConfig) -
 
 
 
-def should_go_to_implementation(state: ValueCanvasState) -> Literal["implementation", "chat_agent"]:
-    """Determine if we should go to implementation node."""
+def route_decision(state: ValueCanvasState) -> Literal["implementation", "chat_agent", "halt"]:
+    """Determine the next node to go to based on current state."""
+    # 1. All sections complete → Implementation
     if state.get("finished", False):
         return "implementation"
+    
+    # Helper: determine if there's an unresponded user message
+    def has_pending_user_input() -> bool:
+        msgs = state.get("messages", [])
+        if not msgs:
+            return False
+        last_msg = msgs[-1]
+        from langchain_core.messages import HumanMessage, AIMessage  # local import to avoid circular
+        # If last message is from user, agent hasn't replied yet
+        return isinstance(last_msg, HumanMessage)
+    
+    directive = state.get("router_directive")
+    if directive == RouterDirective.STAY or (isinstance(directive, str) and directive.lower() == "stay"):
+        # If the user has replied since last AI message, forward to Chat Agent.
+        if has_pending_user_input():
+            return "chat_agent"
+
+        # 如果 AI 还在等用户回复，则停机等待下一次 run（防止重复提问）。
+        if state.get("awaiting_user_input", False):
+            return "halt"
+
+        # 否则直接 halt（通常刚初始化时会走到这）。
+        return "halt"
+    
+    # 3. 所有其他情况（next/modify 等）→ Chat Agent
     return "chat_agent"
 
 
@@ -342,6 +446,8 @@ def build_value_canvas_graph():
     graph = StateGraph(ValueCanvasState)
     
     # Add nodes
+    # initialize_node removed per design; router is now first node
+    # graph.add_node("initialize", initialize_node)
     graph.add_node("router", router_node)
     graph.add_node("chat_agent", chat_agent_node)
     graph.add_node("memory_updater", memory_updater_node)
@@ -353,10 +459,11 @@ def build_value_canvas_graph():
     # Router can go to chat agent or implementation
     graph.add_conditional_edges(
         "router",
-        should_go_to_implementation,
+        route_decision,
         {
             "chat_agent": "chat_agent",
             "implementation": "implementation",
+            "halt": END,
         }
     )
     

@@ -178,14 +178,15 @@ class ChatAgentOutput(BaseModel):
 class ValueCanvasState(MessagesState):
     """State for Value Canvas agent."""
     # User and document identification
-    user_id: str
-    doc_id: str
+    user_id: str = "studio-user"
+    doc_id: str = "studio-doc"
     
     # Navigation and progress
     current_section: SectionID = SectionID.INTERVIEW
     context_packet: Optional[ContextPacket] = None
     section_states: Dict[str, SectionState] = Field(default_factory=dict)
-    router_directive: str = RouterDirective.STAY
+    # 初次进入希望 Router 直接调用 get_context，所以默认 NEXT
+    router_directive: str = RouterDirective.NEXT
     finished: bool = False
     
     # Value Canvas data
@@ -196,6 +197,8 @@ class ValueCanvasState(MessagesState):
     
     # Agent output
     agent_output: Optional[ChatAgentOutput] = None
+    # Whether the agent is waiting for user's reply in current section
+    awaiting_user_input: bool = False
     
     # Error tracking
     error_count: int = 0

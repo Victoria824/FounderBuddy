@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from langchain_core.tools import tool
+from supabase import create_client, Client
 
 from agents.value_canvas_models import (
     ContextPacket,
@@ -18,8 +19,27 @@ from agents.value_canvas_models import (
     ValidationRule,
 )
 from agents.value_canvas_prompts import SECTION_PROMPTS, SECTION_TEMPLATES
+from core.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# Initialize Supabase client
+def get_supabase_client() -> Client:
+    """Get configured Supabase client."""
+    supabase_url = getattr(settings, 'SUPABASE_URL', None)
+    supabase_key = getattr(settings, 'SUPABASE_ANON_KEY', None)
+    
+    # Convert SecretStr to string if needed
+    if supabase_url and hasattr(supabase_url, 'get_secret_value'):
+        supabase_url = supabase_url.get_secret_value()
+    if supabase_key and hasattr(supabase_key, 'get_secret_value'):
+        supabase_key = supabase_key.get_secret_value()
+    
+    if not supabase_url or not supabase_key:
+        logger.warning("Supabase credentials not configured, using mock mode")
+        return None
+    
+    return create_client(supabase_url, supabase_key)
 
 
 @tool
@@ -81,9 +101,22 @@ async def get_context(
         LIMIT 1;
         """
         
-        # Execute query using MCP tool - this is now available in the environment
-        from mcp__supabase__execute_sql import mcp__supabase__execute_sql
-        result = await mcp__supabase__execute_sql.ainvoke({"query": query})
+        # Execute query using Supabase SDK
+        supabase = get_supabase_client()
+        if supabase:
+            try:
+                result = supabase.rpc('get_section_state', {
+                    'p_user_id': user_id,
+                    'p_doc_id': doc_id, 
+                    'p_section_id': section_id
+                }).execute()
+                result = result.data if result.data else []
+            except Exception as e:
+                logger.error(f"Supabase query failed: {e}")
+                result = []
+        else:
+            logger.info("Using mock data for development (no Supabase configured)")
+            result = []
         
         if result and len(result) > 0:
             row = result[0]
@@ -108,7 +141,7 @@ async def get_context(
         "status": status,
         "system_prompt": system_prompt,
         "draft": draft,
-        "validation_rules": [rule.model_dump() for rule in template.validation_rules],
+        "validation_rules": {str(i): rule.model_dump() for i, rule in enumerate(template.validation_rules)},
         "required_fields": template.required_fields,
     }
 
@@ -140,57 +173,43 @@ async def save_section(
     
     current_time = datetime.utcnow().isoformat() + "Z"
     
-    try:
-        # Prepare content as JSON string, escaping quotes properly
-        content_json = json.dumps(content).replace("'", "''")
-        
-        # Upsert query with conflict resolution
-        query = f"""
-        INSERT INTO section_states (user_id, doc_id, section_id, content, score, status)
-        VALUES ('{user_id}', '{doc_id}', '{section_id}', '{content_json}', {score if score is not None else 'NULL'}, '{status}')
-        ON CONFLICT (user_id, doc_id, section_id)
-        DO UPDATE SET
-            content = EXCLUDED.content,
-            score = EXCLUDED.score,
-            status = EXCLUDED.status,
-            updated_at = NOW()
-        RETURNING id, user_id, doc_id, section_id, content, score, status, updated_at;
-        """
-        
-        # Execute query using MCP tool
-        from mcp__supabase__execute_sql import mcp__supabase__execute_sql
-        result = await mcp__supabase__execute_sql.ainvoke({"query": query})
-        
-        if result and len(result) > 0:
-            row = result[0]
-            logger.info(f"Successfully saved section {section_id}")
-            return {
-                "id": row.get('id'),
-                "user_id": row.get('user_id'),
-                "doc_id": row.get('doc_id'),
-                "section_id": row.get('section_id'),
-                "content": row.get('content'),
-                "score": row.get('score'),
-                "status": row.get('status'),
-                "updated_at": row.get('updated_at'),
-            }
-        else:
-            # Mock response for development
-            logger.info(f"Using mock response for section {section_id}")
-            return {
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "doc_id": doc_id,
-                "section_id": section_id,
-                "content": content,
-                "score": score,
-                "status": status,
-                "updated_at": current_time,
-            }
+    # Execute query using Supabase SDK
+    supabase = get_supabase_client()
+    if supabase:
+        try:
+            # Use upsert for save_section
+            result = supabase.table('section_states').upsert({
+                'user_id': user_id,
+                'doc_id': doc_id,
+                'section_id': section_id,
+                'content': content,
+                'score': score,
+                'status': status,
+                'updated_at': current_time
+            }).execute()
             
-    except Exception as e:
-        logger.error(f"Error saving section: {e}")
-        # Return mock response on error for development
+            if result.data and len(result.data) > 0:
+                row = result.data[0]
+                logger.info(f"Successfully saved section {section_id}")
+                return {
+                    "id": row.get('id'),
+                    "user_id": row.get('user_id'),
+                    "doc_id": row.get('doc_id'),
+                    "section_id": row.get('section_id'),
+                    "content": row.get('content'),
+                    "score": row.get('score'),
+                    "status": row.get('status'),
+                    "updated_at": row.get('updated_at'),
+                }
+            else:
+                logger.warning(f"No data returned from Supabase for section {section_id}")
+                # Fall through to mock response
+        except Exception as e:
+            logger.error(f"Supabase operation failed: {e}")
+            # Fall through to mock response
+        
+        # Mock response for development (both no Supabase config and Supabase errors)
+        logger.info(f"Using mock response for section {section_id}")
         return {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
@@ -270,9 +289,21 @@ async def get_all_sections_status(
         SELECT * FROM get_document_sections('{user_id}', '{doc_id}');
         """
         
-        # Execute query using MCP tool
-        from mcp__supabase__execute_sql import mcp__supabase__execute_sql
-        result = await mcp__supabase__execute_sql.ainvoke({"query": query})
+        # Execute query using Supabase SDK
+        supabase = get_supabase_client()
+        if supabase:
+            try:
+                result = supabase.rpc('get_document_sections', {
+                    'p_user_id': user_id,
+                    'p_doc_id': doc_id
+                }).execute()
+                result = result.data if result.data else []
+            except Exception as e:
+                logger.error(f"Supabase query failed: {e}")
+                result = []
+        else:
+            logger.info("Mock mode: returning empty sections list")
+            result = []
         
         # Convert database results to expected format
         sections = []
@@ -369,9 +400,19 @@ async def export_checklist(
         WHERE id = '{doc_id}' AND user_id = '{user_id}';
         """
         
-        # Execute query using MCP tool
-        from mcp__supabase__execute_sql import mcp__supabase__execute_sql
-        await mcp__supabase__execute_sql.ainvoke({"query": update_query})
+        # Execute query using Supabase SDK
+        supabase = get_supabase_client()
+        if supabase:
+            try:
+                supabase.table('value_canvas_documents').update({
+                    'completed': True,
+                    'completed_at': datetime.now().isoformat(),
+                    'export_url': 'generated'
+                }).eq('id', doc_id).eq('user_id', user_id).execute()
+            except Exception as e:
+                logger.error(f"Supabase update failed: {e}")
+        else:
+            logger.info("Mock mode: document marked as completed")
         
         logger.info(f"Successfully exported checklist for doc {doc_id}")
         
@@ -555,9 +596,15 @@ async def _execute_sql_query(query: str) -> List[Dict[str, Any]]:
     """
     try:
         logger.info(f"Executing SQL query: {query[:100]}...")
-        from mcp__supabase__execute_sql import mcp__supabase__execute_sql
-        result = await mcp__supabase__execute_sql.ainvoke({"query": query})
-        return result if result else []
+        supabase = get_supabase_client()
+        if supabase:
+            # This is a generic SQL execution function - would need specific implementation
+            # For now, return empty result in development mode
+            logger.warning("Generic SQL execution not implemented with Supabase SDK")
+            return []
+        else:
+            logger.info("Mock mode: returning empty SQL result")
+            return []
         
     except Exception as e:
         logger.error(f"Error executing SQL query: {e}")
