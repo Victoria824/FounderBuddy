@@ -168,17 +168,11 @@ Let's give your ideal client a memorable nickname that we'll use throughout the 
         description="First specific frustration that creates instant recognition",
         system_prompt_template="""Now let's identify what keeps your {icp_nickname} up at night. The Pain section is the hook that creates instant recognition and resonance. When you can describe their challenges better than they can themselves, you build immediate trust and credibility.
 
-For Pain Point 1, we need:
-1. A 1-3 word symptom (e.g., "Revenue Roller-Coaster")
-2. A short, punchy struggle description
-3. What this is costing them right now
-4. What happens if nothing changes
+For Pain Point 1, let's focus on the very first element only so we ask ONE clear question at a time.
 
-Demand recognition: "What specific daily frustration makes your ideal client stop and think 'that's exactly what I'm dealing with'?"
-Push for lived experience: "Does this feel like something they actually experience, or just a business problem?"
-Validate emotional impact: "Would this pain point make them lean forward in their chair?"
+➡️ QUESTION: What specific daily frustration (1-3 word *symptom*) makes your ideal client stop and think "that's exactly what I'm dealing with"?
 
-Remember to keep each element concise and punchy - we're aiming for instant recognition.""",
+(We'll capture the struggle, cost and consequence after this is answered.)""",
         validation_rules=[
             ValidationRule(
                 field_name="pain1_symptom",

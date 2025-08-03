@@ -197,7 +197,7 @@ class ValueCanvasState(MessagesState):
     
     # Agent output
     agent_output: Optional[ChatAgentOutput] = None
-    # Whether the agent is waiting for user's reply in current section
+    # Flag indicating the agent has asked a question and is waiting for user's reply
     awaiting_user_input: bool = False
     
     # Error tracking

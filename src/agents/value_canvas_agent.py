@@ -120,6 +120,15 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     state.setdefault("messages", [])
     state.setdefault("short_memory", [])
     state.setdefault("awaiting_user_input", False)
+    
+    # Check if there's a new user message - if so, reset awaiting_user_input
+    msgs = state.get("messages", [])
+    if msgs and len(msgs) >= 2:
+        last_msg = msgs[-1]
+        second_last_msg = msgs[-2]
+        # If last message is human and second last is AI, user has responded
+        if isinstance(last_msg, HumanMessage) and isinstance(second_last_msg, AIMessage):
+            state["awaiting_user_input"] = False
 
     logger.info(
         f"Router node - Current section: {state['current_section']}, Directive: {state['router_directive']}"
@@ -150,6 +159,9 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
             })
             
             state["context_packet"] = ContextPacket(**context)
+            
+            # Reset directive to STAY to prevent repeated transitions
+            state["router_directive"] = RouterDirective.STAY
         else:
             # All sections complete
             logger.info("All sections complete, setting finished flag")
@@ -172,6 +184,9 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
             })
             
             state["context_packet"] = ContextPacket(**context)
+            
+            # Reset directive to STAY to prevent repeated transitions
+            state["router_directive"] = RouterDirective.STAY
         except ValueError:
             logger.error(f"Invalid section ID: {section_id}")
             state["last_error"] = f"Invalid section ID: {section_id}"
@@ -230,11 +245,13 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
             last_human_msg = _last_msg
 
     try:
-        max_attempts = 2
-        parsed_successfully = False
+        max_attempts = 1
         output_data = None
+        # Force OpenAI to return JSON in one shot
+        openai_args = {"response_format": {"type": "json_object"}}
+        
         for attempt in range(max_attempts):
-            response = await llm.ainvoke(messages)
+            response = await llm.ainvoke(messages, **openai_args)
             content = response.content if hasattr(response, "content") else response
 
             # Attempt to parse JSON as below (reuse existing logic in local helper)
@@ -261,10 +278,6 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
                 except json.JSONDecodeError:
                     pass
 
-            # If first attempt failed, add system reprimand and retry
-            if attempt == 0:
-                messages.append(SystemMessage(content="Your last output was not valid JSON. Return ONLY the JSON object – no markdown, no commentary."))
-
         if not parsed_successfully:
             raise ValueError("Failed to get valid JSON from LLM after retries")
 
@@ -275,18 +288,26 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         output_data.setdefault("section_update", None)
 
         agent_output = ChatAgentOutput(**output_data)
-        state["agent_output"] = agent_output
 
         # Determine router directive based on score, per design doc
         if agent_output.score is not None:
-            state["router_directive"] = (
+            calculated_directive = (
                 RouterDirective.NEXT if agent_output.score >= 3 else RouterDirective.STAY
             )
+            state["router_directive"] = calculated_directive
+            
+            # If score-based logic says NEXT but LLM didn't generate transition message,
+            # override the reply to be a transition message
+            if (calculated_directive == RouterDirective.NEXT and 
+                "move on" not in agent_output.reply.lower() and 
+                "next section" not in agent_output.reply.lower()):
+                agent_output.reply = "Great! Let's move on to the next section."
         else:
             # Fallback to value supplied by model (may be stay/next/modify)
             state["router_directive"] = agent_output.router_directive
 
-        # Add AI reply to conversation history
+        state["agent_output"] = agent_output
+
         # If we expect user input next, mark flag
         state["awaiting_user_input"] = (state["router_directive"] == RouterDirective.STAY)
 
@@ -312,7 +333,6 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         state["router_directive"] = "stay"
         state["messages"].append(AIMessage(content=default_output.reply))
         state["awaiting_user_input"] = True
-        state["messages"].append(AIMessage(content=default_output.reply))
         state.setdefault("short_memory", []).append(AIMessage(content=default_output.reply))
     return state
 
@@ -331,11 +351,14 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
     
     agent_out = state.get("agent_output")
 
-    # Decide status based on score
-    def _status_from_score(score):
+    # Decide status based on score and directive
+    def _status_from_output(score, directive):
+        """Return status *string* to align with get_next_unfinished_section() logic."""
+        if directive == RouterDirective.NEXT:
+            return SectionStatus.DONE.value  # "done"
         if score is not None and score >= 3:
-            return SectionStatus.DONE
-        return SectionStatus.IN_PROGRESS
+            return SectionStatus.DONE.value
+        return SectionStatus.IN_PROGRESS.value
 
     if agent_out and agent_out.section_update:
         section_id = state["current_section"].value
@@ -347,7 +370,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             "section_id": section_id,
             "content": agent_out.section_update.model_dump(),
             "score": agent_out.score,
-            "status": _status_from_score(agent_out.score),
+            "status": _status_from_output(agent_out.score, agent_out.router_directive),
         })
         
         # Update local state
@@ -355,7 +378,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             "section_id": section_id,
             "content": agent_out.section_update.model_dump(),
             "score": agent_out.score,
-            "status": _status_from_score(agent_out.score),
+            "status": _status_from_output(agent_out.score, agent_out.router_directive),
         }
         
         # Extract plain text and update canvas data
@@ -367,7 +390,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
         section_id = state["current_section"].value
         state["section_states"].setdefault(section_id, {})
         state["section_states"][section_id]["score"] = agent_out.score
-        state["section_states"][section_id]["status"] = _status_from_score(agent_out.score)
+        state["section_states"][section_id]["status"] = _status_from_output(agent_out.score, agent_out.router_directive)
 
     return state
 
@@ -424,6 +447,8 @@ def route_decision(state: ValueCanvasState) -> Literal["implementation", "chat_a
         return isinstance(last_msg, HumanMessage)
     
     directive = state.get("router_directive")
+    
+    # 2. STAY directive - continue on current section
     if directive == RouterDirective.STAY or (isinstance(directive, str) and directive.lower() == "stay"):
         # If the user has replied since last AI message, forward to Chat Agent.
         if has_pending_user_input():
@@ -436,8 +461,26 @@ def route_decision(state: ValueCanvasState) -> Literal["implementation", "chat_a
         # 否则直接 halt（通常刚初始化时会走到这）。
         return "halt"
     
-    # 3. 所有其他情况（next/modify 等）→ Chat Agent
-    return "chat_agent"
+    # 3. NEXT/MODIFY directive - section transition  
+    elif directive == RouterDirective.NEXT or (isinstance(directive, str) and directive.startswith("modify:")):
+        # For NEXT/MODIFY directives, we need to let the router handle the transition
+        # and then ask the first question for the new section
+        
+        # If there's a pending user input, it means user has acknowledged the transition
+        # Let router process the directive and then go to chat_agent for new section
+        if has_pending_user_input():
+            return "chat_agent"
+        
+        # If Chat Agent just set NEXT directive but user hasn't responded yet, halt and wait
+        msgs = state.get("messages", [])
+        if msgs and isinstance(msgs[-1], AIMessage):
+            return "halt"
+        
+        # Default case - go to chat_agent to ask first question of current section
+        return "chat_agent"
+    
+    # 4. Default case - halt to prevent infinite loops
+    return "halt"
 
 
 # Build the graph
