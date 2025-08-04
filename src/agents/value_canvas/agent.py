@@ -72,10 +72,15 @@ async def initialize_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     logger.info("Initialize node - Setting up default values")
     
     # Ensure all required fields have default values
+    import uuid
     if "user_id" not in state or not state["user_id"]:
-        state["user_id"] = "studio-user"
+        # Generate a real UUID for user_id
+        state["user_id"] = str(uuid.uuid4())
+        logger.info(f"Generated new user_id: {state['user_id']}")
     if "doc_id" not in state or not state["doc_id"]:
-        state["doc_id"] = "studio-doc"
+        # Generate a real UUID for doc_id
+        state["doc_id"] = str(uuid.uuid4())
+        logger.info(f"Generated new doc_id: {state['doc_id']}")
     if "current_section" not in state:
         state["current_section"] = SectionID.INTERVIEW
     if "router_directive" not in state:
@@ -111,8 +116,13 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     """
     # Ensure essential keys exist by injecting default values defined in ValueCanvasState.
     # This lets users start a new thread in LangGraph Studio without manually supplying state.
-    state.setdefault("user_id", "studio-user")
-    state.setdefault("doc_id", "studio-doc")
+    import uuid
+    if not state.get("user_id"):
+        state["user_id"] = str(uuid.uuid4())
+        logger.info(f"Router: Generated new user_id: {state['user_id']}")
+    if not state.get("doc_id"):
+        state["doc_id"] = str(uuid.uuid4())
+        logger.info(f"Router: Generated new doc_id: {state['doc_id']}")
     state.setdefault("current_section", SectionID.INTERVIEW)
     state.setdefault("router_directive", RouterDirective.NEXT)
     state.setdefault("finished", False)
@@ -158,12 +168,14 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
             state["current_section"] = next_section
             
             # Get context for new section
+            logger.debug(f"DATABASE_DEBUG: Router calling get_context for section {next_section.value}")
             context = await get_context.ainvoke({
                 "user_id": state["user_id"],
                 "doc_id": state["doc_id"],
                 "section_id": next_section.value,
                 "canvas_data": state["canvas_data"].model_dump(),
             })
+            logger.debug(f"DATABASE_DEBUG: get_context returned for section {next_section.value}")
             
             state["context_packet"] = ContextPacket(**context)
             
@@ -183,12 +195,14 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
             state["current_section"] = new_section
             
             # Get context for new section
+            logger.debug(f"DATABASE_DEBUG: Router calling get_context for modify section {new_section.value}")
             context = await get_context.ainvoke({
                 "user_id": state["user_id"],
                 "doc_id": state["doc_id"],
                 "section_id": new_section.value,
                 "canvas_data": state["canvas_data"].model_dump(),
             })
+            logger.debug(f"DATABASE_DEBUG: get_context returned for modify section {new_section.value}")
             
             state["context_packet"] = ContextPacket(**context)
             
@@ -362,6 +376,17 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
 
         # [DIAGNOSTIC] Log the output from the agent
         logger.info(f"DEBUG_CHAT_AGENT: Agent output generated: {state.get('agent_output')}")
+        
+        # [SAVE_SECTION_DEBUG] Track when Chat Agent generates section_update
+        if state.get('agent_output') and state['agent_output'].section_update:
+            logger.info(f"SAVE_SECTION_DEBUG: ✅ Chat Agent DID generate section_update for section {state['current_section']}")
+            logger.debug(f"SAVE_SECTION_DEBUG: Section update content type: {type(state['agent_output'].section_update)}")
+        else:
+            logger.info(f"SAVE_SECTION_DEBUG: ❌ Chat Agent did NOT generate section_update for section {state['current_section']}")
+            if state.get('agent_output'):
+                logger.debug(f"SAVE_SECTION_DEBUG: Agent output exists but section_update is: {state['agent_output'].section_update}")
+            else:
+                logger.debug(f"SAVE_SECTION_DEBUG: No agent output exists at all")
 
     except Exception as e:
         logger.error(f"Failed to parse structured output: {e}\nResponse: {response.content if 'response' in locals() else ''}")
@@ -389,12 +414,19 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
     - Manage short_memory size
     - Handle database writes
     """
-    logger.info("Memory updater node")
+    logger.info("=== DATABASE_DEBUG: memory_updater_node() ENTRY ===")
+    logger.info("DATABASE_DEBUG: Memory updater node processing agent output")
     
     agent_out = state.get("agent_output")
+    logger.debug(f"DATABASE_DEBUG: Agent output exists: {bool(agent_out)}")
+    if agent_out:
+        logger.debug(f"DATABASE_DEBUG: Agent output - section_update: {bool(agent_out.section_update)}, score: {agent_out.score}, router_directive: {agent_out.router_directive}")
 
     # [DIAGNOSTIC] Log state before update
-    logger.info(f"DEBUG_MEMORY_UPDATER: section_states BEFORE update: {state.get('section_states', {})}")
+    logger.info(f"DATABASE_DEBUG: section_states BEFORE update: {state.get('section_states', {})}")
+    logger.debug(f"DATABASE_DEBUG: Current section: {state.get('current_section')}")
+    context_packet = state.get('context_packet')
+    logger.debug(f"DATABASE_DEBUG: Context packet section: {context_packet.section_id if context_packet else None}")
 
     # Decide status based on score and directive
     def _status_from_output(score, directive):
@@ -405,45 +437,169 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             return SectionStatus.DONE.value
         return SectionStatus.IN_PROGRESS.value
 
+    # [SAVE_SECTION_DEBUG] Track decision path in memory_updater_node
+    logger.info(f"SAVE_SECTION_DEBUG: memory_updater_node decision analysis:")
+    logger.info(f"SAVE_SECTION_DEBUG: - agent_out exists: {bool(agent_out)}")
+    if agent_out:
+        logger.info(f"SAVE_SECTION_DEBUG: - agent_out.section_update exists: {bool(agent_out.section_update)}")
+        logger.info(f"SAVE_SECTION_DEBUG: - agent_out.score: {agent_out.score}")
+        logger.info(f"SAVE_SECTION_DEBUG: - agent_out.router_directive: {agent_out.router_directive}")
+    else:
+        logger.info(f"SAVE_SECTION_DEBUG: - No agent_out, will not call save_section")
+    
     if agent_out and agent_out.section_update:
         section_id = state["current_section"].value
+        logger.info(f"SAVE_SECTION_DEBUG: ✅ ENTERING BRANCH 1: Processing section_update for section {section_id}")
+        logger.info(f"DATABASE_DEBUG: Processing section_update for section {section_id}")
+        logger.debug(f"DATABASE_DEBUG: Section update content type: {type(agent_out.section_update)}")
         
         # Save to database using save_section tool
-        await save_section.ainvoke({
+        logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section with structured content")
+        logger.debug("DATABASE_DEBUG: Calling save_section tool with structured content")
+        
+        # [CRITICAL DEBUG] Log the exact parameters being passed to save_section
+        computed_status = _status_from_output(agent_out.score, agent_out.router_directive)
+        logger.info(f"SAVE_SECTION_DEBUG: About to call save_section with:")
+        logger.info(f"SAVE_SECTION_DEBUG: - user_id: {state['user_id']}")
+        logger.info(f"SAVE_SECTION_DEBUG: - doc_id: {state['doc_id']}")
+        logger.info(f"SAVE_SECTION_DEBUG: - section_id: {section_id}")
+        logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
+        logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status} (type: {type(computed_status)})")
+        logger.info(f"SAVE_SECTION_DEBUG: - router_directive was: {agent_out.router_directive} (type: {type(agent_out.router_directive)})")
+        
+        save_result = await save_section.ainvoke({
             "user_id": state["user_id"],
             "doc_id": state["doc_id"],
             "section_id": section_id,
             "content": agent_out.section_update.model_dump(),
             "score": agent_out.score,
-            "status": _status_from_output(agent_out.score, agent_out.router_directive),
+            "status": computed_status,
         })
+        logger.debug(f"DATABASE_DEBUG: save_section returned: {bool(save_result)}")
         
         # Update local state
+        logger.debug("DATABASE_DEBUG: Updating local section_states with new content")
         state["section_states"][section_id] = {
             "section_id": section_id,
             "content": agent_out.section_update.model_dump(),
             "score": agent_out.score,
             "status": _status_from_output(agent_out.score, agent_out.router_directive),
         }
+        logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 1 COMPLETED: Section {section_id} saved with structured content")
+        logger.info(f"DATABASE_DEBUG: ✅ Section {section_id} updated with structured content")
         
         # Extract plain text and update canvas data
         # This would parse the content and update specific fields in canvas_data
         # For example, if section is ICP, extract icp_nickname, etc.
         
-    # Even if there is no section_update (评分轮)，也要更新分数与状态
-    if agent_out and not agent_out.section_update:
+    # Handle cases where agent provides score/status but no structured section_update  
+    elif agent_out:
+        logger.info(f"SAVE_SECTION_DEBUG: ✅ ENTERING BRANCH 2: Processing agent output without section_update")
+        logger.info("DATABASE_DEBUG: Processing agent output without section_update (likely score/status only)")
         # BUG FIX: Do not use state["current_section"] as it might have been updated by the router already.
-        # Instead, use the section_id from the context_packet that the chat_agent used to generate the score.
+        # Instead, use the section_id from the context_packet that the chat_agent used to generate the response.
         if state.get("context_packet"):
-            section_id = state["context_packet"].section_id.value
-            state["section_states"].setdefault(section_id, {})
-            state["section_states"][section_id]["score"] = agent_out.score
-            state["section_states"][section_id]["status"] = _status_from_output(agent_out.score, agent_out.router_directive)
+            score_section_id = state["context_packet"].section_id.value
+            logger.debug(f"DATABASE_DEBUG: Processing score/status update for section {score_section_id}")
+            
+            # Update existing section state with score and status
+            if score_section_id in state["section_states"]:
+                logger.debug(f"DATABASE_DEBUG: Found existing section state for {score_section_id}, updating score")
+                # Update local state
+                state["section_states"][score_section_id]["score"] = agent_out.score
+                state["section_states"][score_section_id]["status"] = _status_from_output(agent_out.score, agent_out.router_directive)
+                
+                # Save updated state to database only if we have meaningful content or a score
+                if agent_out.score is not None or state["section_states"][score_section_id].get("content"):
+                    logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section to update existing section {score_section_id} with score")
+                    logger.debug("DATABASE_DEBUG: Calling save_section to update existing section with score")
+                    
+                    # [CRITICAL DEBUG] Log parameters for BRANCH 2A update
+                    computed_status_2a = _status_from_output(agent_out.score, agent_out.router_directive)
+                    logger.info(f"SAVE_SECTION_DEBUG: BRANCH 2A calling save_section with:")
+                    logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
+                    logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status_2a} (type: {type(computed_status_2a)})")
+                    
+                    save_result = await save_section.ainvoke({
+                        "user_id": state["user_id"],
+                        "doc_id": state["doc_id"],
+                        "section_id": score_section_id,
+                        "content": state["section_states"][score_section_id].get("content", {"type": "doc", "content": []}),
+                        "score": agent_out.score,
+                        "status": computed_status_2a,
+                    })
+                    logger.debug(f"DATABASE_DEBUG: Score update save_section returned: {bool(save_result)}")
+                logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 2A COMPLETED: Updated existing section {score_section_id} with score")
+                logger.info(f"DATABASE_DEBUG: ✅ Updated existing section {score_section_id} with score {agent_out.score}")
+            else:
+                # If section doesn't exist in local state but we have a score, create minimal entry
+                if agent_out.score is not None:
+                    logger.debug(f"DATABASE_DEBUG: Section {score_section_id} not in local state, creating minimal entry with score")
+                    # Create minimal content indicating section was scored
+                    minimal_content = {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": f"Section scored: {agent_out.score}/5"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                    
+                    # Save to database
+                    logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section to create new minimal section {score_section_id}")
+                    logger.debug("DATABASE_DEBUG: Calling save_section to create new minimal section entry")
+                    
+                    # [CRITICAL DEBUG] Log parameters for BRANCH 2B new section
+                    computed_status_2b = _status_from_output(agent_out.score, agent_out.router_directive)
+                    logger.info(f"SAVE_SECTION_DEBUG: BRANCH 2B calling save_section with:")
+                    logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
+                    logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status_2b} (type: {type(computed_status_2b)})")
+                    
+                    save_result = await save_section.ainvoke({
+                        "user_id": state["user_id"],
+                        "doc_id": state["doc_id"],
+                        "section_id": score_section_id,
+                        "content": minimal_content,
+                        "score": agent_out.score,
+                        "status": computed_status_2b,
+                    })
+                    logger.debug(f"DATABASE_DEBUG: Minimal entry save_section returned: {bool(save_result)}")
+                    
+                    # Update local state
+                    state["section_states"][score_section_id] = {
+                        "section_id": score_section_id,
+                        "content": minimal_content,
+                        "score": agent_out.score,
+                        "status": _status_from_output(agent_out.score, agent_out.router_directive),
+                    }
+                    logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 2B COMPLETED: Created new minimal section {score_section_id}")
+                    logger.info(f"DATABASE_DEBUG: ✅ Created new minimal section {score_section_id} with score {agent_out.score}")
+                else:
+                    logger.info(f"SAVE_SECTION_DEBUG: ❌ BRANCH 2C SKIPPED: No score and section {score_section_id} doesn't exist locally")
+                    logger.debug(f"DATABASE_DEBUG: No score provided and section {score_section_id} doesn't exist locally, skipping")
         else:
-            logger.warning("Cannot update score as context_packet is missing.")
+            logger.info(f"SAVE_SECTION_DEBUG: ❌ BRANCH 2 FAILED: Cannot update section state as context_packet is missing")
+            logger.warning("DATABASE_DEBUG: ⚠️ Cannot update section state as context_packet is missing")
 
+    # [SAVE_SECTION_DEBUG] Final decision summary
+    if not agent_out:
+        logger.info(f"SAVE_SECTION_DEBUG: ❌ FINAL RESULT: No agent_out - save_section was NEVER called")
+    elif agent_out.section_update:
+        logger.info(f"SAVE_SECTION_DEBUG: ✅ FINAL RESULT: Had section_update - save_section was called in BRANCH 1")
+    elif agent_out:
+        logger.info(f"SAVE_SECTION_DEBUG: ✅ FINAL RESULT: Had agent_out but no section_update - save_section was called in BRANCH 2 (if conditions met)")
+    else:
+        logger.info(f"SAVE_SECTION_DEBUG: ❌ FINAL RESULT: Unknown state - save_section may not have been called")
+    
     # [DIAGNOSTIC] Log state after update
-    logger.info(f"DEBUG_MEMORY_UPDATER: section_states AFTER update: {state.get('section_states', {})}")
+    logger.info(f"DATABASE_DEBUG: section_states AFTER update: {state.get('section_states', {})}")
+    logger.info("=== DATABASE_DEBUG: memory_updater_node() EXIT ===")
 
     return state
 
@@ -580,8 +736,23 @@ graph = build_value_canvas_graph()
 
 
 # Initialize function for new conversations
-async def initialize_value_canvas_state(user_id: str, doc_id: str) -> ValueCanvasState:
-    """Initialize a new Value Canvas state."""
+async def initialize_value_canvas_state(user_id: str = None, doc_id: str = None) -> ValueCanvasState:
+    """Initialize a new Value Canvas state.
+    
+    Args:
+        user_id: User UUID (will be generated if not provided)
+        doc_id: Document UUID (will be generated if not provided)
+    """
+    import uuid
+    
+    # Generate UUIDs if not provided
+    if not user_id:
+        user_id = str(uuid.uuid4())
+        logger.info(f"Generated new user_id: {user_id}")
+    if not doc_id:
+        doc_id = str(uuid.uuid4())
+        logger.info(f"Generated new doc_id: {doc_id}")
+    
     initial_state = ValueCanvasState(
         user_id=user_id,
         doc_id=doc_id,

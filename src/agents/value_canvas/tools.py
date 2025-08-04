@@ -1,5 +1,6 @@
 """Tools for Value Canvas Agent with Supabase integration."""
 
+import asyncio
 import json
 import logging
 import uuid
@@ -26,20 +27,38 @@ logger = logging.getLogger(__name__)
 # Initialize Supabase client
 def get_supabase_client() -> Client:
     """Get configured Supabase client."""
+    logger.debug("=== DATABASE_DEBUG: Starting Supabase client initialization ===")
+    
     supabase_url = getattr(settings, 'SUPABASE_URL', None)
     supabase_key = getattr(settings, 'SUPABASE_ANON_KEY', None)
     
+    logger.debug(f"DATABASE_DEBUG: Raw SUPABASE_URL type: {type(supabase_url)}")
+    logger.debug(f"DATABASE_DEBUG: Raw SUPABASE_ANON_KEY type: {type(supabase_key)}")
+    
     # Convert SecretStr to string if needed
     if supabase_url and hasattr(supabase_url, 'get_secret_value'):
+        logger.debug("DATABASE_DEBUG: Converting SUPABASE_URL from SecretStr")
         supabase_url = supabase_url.get_secret_value()
     if supabase_key and hasattr(supabase_key, 'get_secret_value'):
+        logger.debug("DATABASE_DEBUG: Converting SUPABASE_ANON_KEY from SecretStr")
         supabase_key = supabase_key.get_secret_value()
     
+    logger.debug(f"DATABASE_DEBUG: Final URL exists: {bool(supabase_url)}")
+    logger.debug(f"DATABASE_DEBUG: Final key exists: {bool(supabase_key)}")
+    
     if not supabase_url or not supabase_key:
-        logger.warning("Supabase credentials not configured, using mock mode")
+        logger.warning("DATABASE_DEBUG: ⚠️ Supabase credentials not configured, using mock mode")
         return None
     
-    return create_client(supabase_url, supabase_key)
+    logger.debug(f"DATABASE_DEBUG: Creating Supabase client for URL: {supabase_url[:30]}...")
+    
+    try:
+        client = create_client(supabase_url, supabase_key)
+        logger.info("DATABASE_DEBUG: ✅ Supabase client created successfully")
+        return client
+    except Exception as e:
+        logger.error(f"DATABASE_DEBUG: ❌ Failed to create Supabase client: {e}")
+        return None
 
 
 @tool
@@ -64,7 +83,10 @@ async def get_context(
     Returns:
         Context packet with system prompt and draft content
     """
-    logger.info(f"Getting context for section {section_id} - user: {user_id}, doc: {doc_id}")
+    logger.info(f"=== DATABASE_DEBUG: get_context() ENTRY ===")
+    logger.info(f"DATABASE_DEBUG: Section: {section_id}, User: {user_id}, Doc: {doc_id}")
+    logger.debug(f"DATABASE_DEBUG: User ID type: {type(user_id)}, Doc ID type: {type(doc_id)}")
+    logger.debug(f"DATABASE_DEBUG: Canvas data provided: {bool(canvas_data)}")
     
     # Get section template
     template = SECTION_TEMPLATES.get(section_id)
@@ -86,55 +108,89 @@ async def get_context(
     
     system_prompt = f"{base_prompt}\\n\\n---\\n\\n{section_prompt}"
     
-    # Fetch draft from database using Supabase MCP
+    # Fetch draft from database
+    logger.debug("DATABASE_DEBUG: Starting database fetch for existing section state...")
     draft = None
     status = "pending"
     
-    try:
-        # Use the Supabase MCP tool to query the database
-        query = f"""
-        SELECT content, status, score, updated_at
-        FROM section_states 
-        WHERE user_id = '{user_id}' 
-          AND doc_id = '{doc_id}' 
-          AND section_id = '{section_id}'
-        LIMIT 1;
-        """
-        
-        # Execute query using Supabase SDK
-        supabase = get_supabase_client()
-        if supabase:
-            try:
-                result = supabase.rpc('get_section_state', {
+    supabase = get_supabase_client()
+    if supabase:
+        logger.debug("DATABASE_DEBUG: ✅ Supabase client available, attempting database fetch")
+        try:
+            # Option 1: Try RPC function first (using asyncio.to_thread for sync calls)
+            logger.debug("DATABASE_DEBUG: Attempting RPC call: get_section_state")
+            logger.debug(f"DATABASE_DEBUG: RPC parameters - user_id: {user_id}, doc_id: {doc_id}, section_id: {section_id}")
+            
+            def _rpc_call():
+                return supabase.rpc('get_section_state', {
                     'p_user_id': user_id,
                     'p_doc_id': doc_id, 
                     'p_section_id': section_id
                 }).execute()
-                result = result.data if result.data else []
-            except Exception as e:
-                logger.error(f"Supabase query failed: {e}")
-                result = []
-        else:
-            logger.info("Using mock data for development (no Supabase configured)")
-            result = []
-        
-        if result and len(result) > 0:
-            row = result[0]
-            status = row.get('status', 'pending')
-            content_data = row.get('content')
             
-            if content_data and content_data != {'type': 'doc', 'content': []}:
-                # Convert to SectionContent format
-                draft = {
-                    "content": content_data,
-                    "plain_text": await extract_plain_text.ainvoke(content_data)
-                }
+            result = await asyncio.to_thread(_rpc_call)
+            logger.debug(f"DATABASE_DEBUG: RPC call completed - Data count: {len(result.data) if result.data else 0}")
+            
+            if result.data and len(result.data) > 0:
+                row = result.data[0]
+                status = row.get('status', 'pending')
+                content_data = row.get('content')
                 
-        logger.info(f"Retrieved section state: status={status}, has_draft={draft is not None}")
-        
-    except Exception as e:
-        logger.error(f"Error fetching section state: {e}")
-        # Use defaults on error
+                logger.debug(f"DATABASE_DEBUG: Found existing data - Status: {status}")
+                logger.debug(f"DATABASE_DEBUG: Content data exists: {bool(content_data)}")
+                logger.debug(f"DATABASE_DEBUG: Content data type: {type(content_data) if content_data else None}")
+                
+                if content_data and content_data != {'type': 'doc', 'content': []}:
+                    # Convert to SectionContent format
+                    draft = {
+                        "content": content_data,
+                        "plain_text": await extract_plain_text.ainvoke(content_data)
+                    }
+                    logger.info(f"DATABASE_DEBUG: ✅ Successfully loaded existing draft content")
+                else:
+                    logger.debug("DATABASE_DEBUG: Content data is empty or default, no draft loaded")
+                logger.info(f"DATABASE_DEBUG: RPC fetch result - status={status}, has_draft={draft is not None}")
+                
+        except Exception as rpc_error:
+            logger.warning(f"DATABASE_DEBUG: ⚠️ RPC function failed: {rpc_error}")
+            logger.debug("DATABASE_DEBUG: Falling back to direct table query...")
+            # Option 2: Fallback to direct table query (also wrapped in to_thread)
+            try:
+                logger.debug("DATABASE_DEBUG: Attempting direct table query on section_states")
+                
+                def _table_call():
+                    return supabase.table('section_states').select(
+                        'content, status, score, updated_at'
+                    ).eq('user_id', user_id).eq('doc_id', doc_id).eq('section_id', section_id).limit(1).execute()
+                
+                result = await asyncio.to_thread(_table_call)
+                logger.debug(f"DATABASE_DEBUG: Table query completed - Data count: {len(result.data) if result.data else 0}")
+                
+                if result.data and len(result.data) > 0:
+                    row = result.data[0]
+                    status = row.get('status', 'pending')
+                    content_data = row.get('content')
+                    
+                    logger.debug(f"DATABASE_DEBUG: Table query found data - Status: {status}")
+                    logger.debug(f"DATABASE_DEBUG: Content data exists: {bool(content_data)}")
+                    
+                    if content_data and content_data != {'type': 'doc', 'content': []}:
+                        draft = {
+                            "content": content_data,
+                            "plain_text": await extract_plain_text.ainvoke(content_data)
+                        }
+                        logger.info(f"DATABASE_DEBUG: ✅ Successfully loaded draft via table query")
+                    else:
+                        logger.debug("DATABASE_DEBUG: Table content data is empty, no draft loaded")
+                    logger.info(f"DATABASE_DEBUG: Table fetch result - status={status}, has_draft={draft is not None}")
+                else:
+                    logger.debug("DATABASE_DEBUG: No existing data found in table query")
+            except Exception as table_error:
+                logger.error(f"DATABASE_DEBUG: ❌ Both RPC and table query failed: {table_error}")
+    else:
+        logger.warning("DATABASE_DEBUG: ⚠️ Supabase client not available, using default values")
+    
+    logger.debug(f"DATABASE_DEBUG: Final context values - status: {status}, draft: {bool(draft)}")
     
     return {
         "section_id": section_id,
@@ -169,23 +225,31 @@ async def save_section(
     Returns:
         Updated section state
     """
-    logger.info(f"Saving section {section_id} for user {user_id}, doc {doc_id}")
+    logger.info(f"=== DATABASE_DEBUG: save_section() ENTRY ===")
+    logger.info(f"DATABASE_DEBUG: Saving section {section_id} for user {user_id}, doc {doc_id}")
+    logger.debug(f"DATABASE_DEBUG: User ID type: {type(user_id)}, Doc ID type: {type(doc_id)}")
+    logger.debug(f"DATABASE_DEBUG: Content type: {type(content)}, Score: {score}, Status: {status}")
     
     # [DIAGNOSTIC] Log all parameters passed to save_section
     logger.info(
-        f"DEBUG_SAVE_SECTION: Parameters received: "
+        f"DATABASE_DEBUG: Full parameters - "
         f"user_id={user_id}, doc_id={doc_id}, section_id='{section_id}', "
         f"score={score}, status='{status}'"
     )
+    logger.debug(f"DATABASE_DEBUG: Content structure: {content}")
 
     current_time = datetime.utcnow().isoformat() + "Z"
+    logger.debug(f"DATABASE_DEBUG: Generated timestamp: {current_time}")
     
     # Execute query using Supabase SDK
     supabase = get_supabase_client()
     if supabase:
+        logger.debug("DATABASE_DEBUG: ✅ Supabase client available, proceeding with upsert")
         try:
-            # Use upsert for save_section
-            result = supabase.table('section_states').upsert({
+            # Use upsert for save_section (wrapped in asyncio.to_thread)
+            logger.debug(f"DATABASE_DEBUG: Preparing upsert data payload")
+            
+            upsert_data = {
                 'user_id': user_id,
                 'doc_id': doc_id,
                 'section_id': section_id,
@@ -193,11 +257,63 @@ async def save_section(
                 'score': score,
                 'status': status,
                 'updated_at': current_time
-            }).execute()
+            }
+            logger.debug(f"DATABASE_DEBUG: Upsert payload prepared - keys: {list(upsert_data.keys())}")
+            logger.info(f"DATABASE_DEBUG: Upsert payload values - user_id={user_id}, section_id={section_id}, score={score}, status={status}")
+            logger.debug(f"DATABASE_DEBUG: About to execute upsert on section_states table")
+            
+            def _update_or_insert_call():
+                logger.info(f"DATABASE_DEBUG: TRYING UPDATE first for existing record")
+                
+                # First try UPDATE
+                update_result = supabase.table('section_states').update({
+                    'content': content,
+                    'score': score,
+                    'status': status,
+                    'updated_at': current_time
+                }).eq('user_id', user_id).eq('doc_id', doc_id).eq('section_id', section_id).execute()
+                
+                logger.info(f"DATABASE_DEBUG: UPDATE result: {update_result}")
+                logger.info(f"DATABASE_DEBUG: UPDATE affected {len(update_result.data)} rows")
+                
+                if update_result.data and len(update_result.data) > 0:
+                    logger.info("DATABASE_DEBUG: ✅ UPDATE successful, record was updated")
+                    return update_result
+                else:
+                    logger.info("DATABASE_DEBUG: UPDATE affected 0 rows, trying INSERT...")
+                    
+                    # If no rows updated, INSERT new record
+                    insert_result = supabase.table('section_states').insert({
+                        'user_id': user_id,
+                        'doc_id': doc_id,
+                        'section_id': section_id,
+                        'content': content,
+                        'score': score,
+                        'status': status,
+                        'updated_at': current_time
+                    }).execute()
+                    
+                    logger.info(f"DATABASE_DEBUG: INSERT result: {insert_result}")
+                    logger.info("DATABASE_DEBUG: ✅ INSERT successful, new record created")
+                    return insert_result
+            
+            logger.debug("DATABASE_DEBUG: Calling asyncio.to_thread for update/insert operation...")
+            result = await asyncio.to_thread(_update_or_insert_call)
+            logger.debug(f"DATABASE_DEBUG: Upsert operation completed")
+            logger.debug(f"DATABASE_DEBUG: Result data count: {len(result.data) if result.data else 0}")
             
             if result.data and len(result.data) > 0:
                 row = result.data[0]
-                logger.info(f"Successfully saved section {section_id}")
+                logger.info(f"DATABASE_DEBUG: ✅ Successfully saved section {section_id} to database")
+                logger.info(f"DATABASE_DEBUG: Returned data - id={row.get('id')}, status={row.get('status')}, score={row.get('score')}")
+                logger.debug(f"DATABASE_DEBUG: Database record created/updated with timestamp: {row.get('updated_at')}")
+                
+                # CRITICAL DEBUG: Check if returned values match what we sent
+                if row.get('status') != status:
+                    logger.error(f"DATABASE_DEBUG: ❌ STATUS MISMATCH! Sent: {status}, Got: {row.get('status')}")
+                if row.get('score') != score:
+                    logger.error(f"DATABASE_DEBUG: ❌ SCORE MISMATCH! Sent: {score}, Got: {row.get('score')}")
+                
                 return {
                     "id": row.get('id'),
                     "user_id": row.get('user_id'),
@@ -209,14 +325,41 @@ async def save_section(
                     "updated_at": row.get('updated_at'),
                 }
             else:
-                logger.warning(f"No data returned from Supabase for section {section_id}")
-                # Fall through to mock response
+                logger.error(f"DATABASE_DEBUG: ❌ Upsert succeeded but no data returned for section {section_id}")
+                logger.error(f"DATABASE_DEBUG: This means the upsert didn't actually save anything!")
+                logger.debug("DATABASE_DEBUG: Returning constructed response with generated ID")
+                # Return what we tried to save
+                return {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "doc_id": doc_id,
+                    "section_id": section_id,
+                    "content": content,
+                    "score": score,
+                    "status": status,
+                    "updated_at": current_time,
+                }
         except Exception as e:
-            logger.error(f"Supabase operation failed: {e}")
-            # Fall through to mock response
-        
-        # Mock response for development (both no Supabase config and Supabase errors)
-        logger.info(f"Using mock response for section {section_id}")
+            logger.error(f"DATABASE_DEBUG: ❌ Supabase save_section failed: {e}")
+            logger.error(f"DATABASE_DEBUG: Failed parameters - user_id={user_id}, doc_id={doc_id}, section_id={section_id}")
+            logger.error(f"DATABASE_DEBUG: Exception type: {type(e).__name__}")
+            logger.error(f"DATABASE_DEBUG: Exception details: {str(e)}")
+            # Don't re-raise in development to avoid blocking the agent completely
+            # Instead, fall back to mock response
+            logger.warning("DATABASE_DEBUG: ⚠️ Falling back to mock response due to database error")
+            return {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "doc_id": doc_id,
+                "section_id": section_id,
+                "content": content,
+                "score": score,
+                "status": status,
+                "updated_at": current_time,
+            }
+    else:
+        # Only use mock response when Supabase is not configured
+        logger.warning(f"DATABASE_DEBUG: ⚠️ Supabase client not available, using mock response for section {section_id}")
         return {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
@@ -288,38 +431,67 @@ async def get_all_sections_status(
     Returns:
         List of section states with status
     """
-    logger.info(f"Getting all section status for user {user_id}, doc {doc_id}")
+    logger.info(f"=== DATABASE_DEBUG: get_all_sections_status() ENTRY ===")
+    logger.info(f"DATABASE_DEBUG: Getting all section status for user {user_id}, doc {doc_id}")
     
     try:
         # Use the helper function from migration to get document sections
-        query = f"""
-        SELECT * FROM get_document_sections('{user_id}', '{doc_id}');
-        """
+        logger.debug("DATABASE_DEBUG: Preparing to fetch all sections for document")
         
         # Execute query using Supabase SDK
         supabase = get_supabase_client()
         if supabase:
+            logger.debug("DATABASE_DEBUG: ✅ Supabase client available, attempting to fetch sections")
             try:
-                result = supabase.rpc('get_document_sections', {
-                    'p_user_id': user_id,
-                    'p_doc_id': doc_id
-                }).execute()
+                # Option 1: Try RPC function first (wrapped in asyncio.to_thread)
+                logger.debug("DATABASE_DEBUG: Attempting RPC call: get_document_sections")
+                logger.debug(f"DATABASE_DEBUG: RPC parameters - user_id: {user_id}, doc_id: {doc_id}")
+                
+                def _rpc_call():
+                    return supabase.rpc('get_document_sections', {
+                        'p_user_id': user_id,
+                        'p_doc_id': doc_id
+                    }).execute()
+                
+                result = await asyncio.to_thread(_rpc_call)
                 result = result.data if result.data else []
-            except Exception as e:
-                logger.error(f"Supabase query failed: {e}")
-                result = []
+                logger.info(f"DATABASE_DEBUG: ✅ Retrieved {len(result)} sections via RPC")
+                logger.debug(f"DATABASE_DEBUG: RPC result sections: {[r.get('section_id') for r in result] if result else []}")
+            except Exception as rpc_error:
+                logger.warning(f"DATABASE_DEBUG: ⚠️ RPC function failed: {rpc_error}")
+                logger.debug("DATABASE_DEBUG: Falling back to direct table query")
+                # Option 2: Fallback to direct table query (also wrapped)
+                try:
+                    logger.debug("DATABASE_DEBUG: Attempting direct table query on section_states")
+                    
+                    def _table_call():
+                        return supabase.table('section_states').select(
+                            'section_id, status, score, content, updated_at'
+                        ).eq('user_id', user_id).eq('doc_id', doc_id).execute()
+                    
+                    result = await asyncio.to_thread(_table_call)
+                    result = result.data if result.data else []
+                    logger.info(f"DATABASE_DEBUG: ✅ Retrieved {len(result)} sections via table query")
+                    logger.debug(f"DATABASE_DEBUG: Table result sections: {[r.get('section_id') for r in result] if result else []}")
+                except Exception as table_error:
+                    logger.error(f"DATABASE_DEBUG: ❌ Both RPC and table query failed: {table_error}")
+                    result = []
         else:
-            logger.info("Mock mode: returning empty sections list")
+            logger.warning("DATABASE_DEBUG: ⚠️ Supabase client not available, returning empty sections list")
             result = []
         
         # Convert database results to expected format
+        logger.debug("DATABASE_DEBUG: Processing database results to section status format")
         sections = []
         existing_sections = {row['section_id']: row for row in result} if result else {}
+        logger.debug(f"DATABASE_DEBUG: Found existing sections in DB: {list(existing_sections.keys())}")
         
         # Ensure all required sections are represented
+        logger.debug("DATABASE_DEBUG: Processing all required sections from SectionID enum")
         for section_id in SectionID:
             if section_id.value in existing_sections:
                 row = existing_sections[section_id.value]
+                logger.debug(f"DATABASE_DEBUG: Processing existing section {section_id.value} - status: {row.get('status')}, score: {row.get('score')}")
                 sections.append({
                     "section_id": section_id.value,
                     "status": row.get('status', SectionStatus.PENDING.value),
@@ -329,6 +501,7 @@ async def get_all_sections_status(
                 })
             else:
                 # Section doesn't exist in database yet
+                logger.debug(f"DATABASE_DEBUG: Section {section_id.value} not found in DB, creating default entry")
                 sections.append({
                     "section_id": section_id.value,
                     "status": SectionStatus.PENDING.value,
@@ -337,7 +510,8 @@ async def get_all_sections_status(
                     "updated_at": None,
                 })
         
-        logger.info(f"Retrieved status for {len(sections)} sections")
+        logger.info(f"DATABASE_DEBUG: ✅ Retrieved status for {len(sections)} sections total")
+        logger.debug(f"DATABASE_DEBUG: Final sections summary: {[(s['section_id'], s['status']) for s in sections]}")
         return sections
         
     except Exception as e:
@@ -411,11 +585,14 @@ async def export_checklist(
         supabase = get_supabase_client()
         if supabase:
             try:
-                supabase.table('value_canvas_documents').update({
-                    'completed': True,
-                    'completed_at': datetime.now().isoformat(),
-                    'export_url': 'generated'
-                }).eq('id', doc_id).eq('user_id', user_id).execute()
+                def _update_call():
+                    return supabase.table('value_canvas_documents').update({
+                        'completed': True,
+                        'completed_at': datetime.now().isoformat(),
+                        'export_url': 'generated'
+                    }).eq('id', doc_id).eq('user_id', user_id).execute()
+                
+                await asyncio.to_thread(_update_call)
             except Exception as e:
                 logger.error(f"Supabase update failed: {e}")
         else:
