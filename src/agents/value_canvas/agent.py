@@ -114,24 +114,6 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     - Call get_context when changing sections
     - Check for completion and set finished flag
     """
-    # Ensure essential keys exist by injecting default values defined in ValueCanvasState.
-    # This lets users start a new thread in LangGraph Studio without manually supplying state.
-    import uuid
-    if not state.get("user_id"):
-        state["user_id"] = str(uuid.uuid4())
-        logger.info(f"Router: Generated new user_id: {state['user_id']}")
-    if not state.get("doc_id"):
-        state["doc_id"] = str(uuid.uuid4())
-        logger.info(f"Router: Generated new doc_id: {state['doc_id']}")
-    state.setdefault("current_section", SectionID.INTERVIEW)
-    state.setdefault("router_directive", RouterDirective.NEXT)
-    state.setdefault("finished", False)
-    state.setdefault("section_states", {})
-    state.setdefault("canvas_data", ValueCanvasData())
-    state.setdefault("messages", [])
-    state.setdefault("short_memory", [])
-    state.setdefault("awaiting_user_input", False)
-    
     # Check if there's a new user message - if so, reset awaiting_user_input
     msgs = state.get("messages", [])
     if msgs and len(msgs) >= 2:
@@ -160,12 +142,32 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     elif directive == RouterDirective.NEXT:
         # Find next unfinished section
         logger.info(f"DEBUG: Preparing to find next section. Current section states: {state.get('section_states', {})}")
+        
+        # DEBUG: Log current section and its state before transition
+        current_section_id = state["current_section"].value
+        logger.info(f"TRANSITION_DEBUG: Leaving section {current_section_id}")
+        if current_section_id in state.get("section_states", {}):
+            current_state = state["section_states"][current_section_id]
+            logger.info(f"TRANSITION_DEBUG: Section {current_section_id} final state - status: {current_state.get('status')}, has_content: {bool(current_state.get('content'))}")
+        
         next_section = get_next_unfinished_section(state.get("section_states", {}))
         logger.info(f"DEBUG: get_next_unfinished_section decided the next section is: {next_section}")
         
         if next_section:
             logger.info(f"Moving to next section: {next_section}")
+            
+            # DEBUG: Check if next section already has state
+            logger.info(f"TRANSITION_DEBUG: Entering section {next_section.value}")
+            if next_section.value in state.get("section_states", {}):
+                logger.warning(f"TRANSITION_DEBUG: WARNING! Section {next_section.value} already has state before entering!")
+                existing_state = state["section_states"][next_section.value]
+                logger.warning(f"TRANSITION_DEBUG: Existing state - status: {existing_state.get('status')}, has_content: {bool(existing_state.get('content'))}")
+            
             state["current_section"] = next_section
+            
+            # Clear short_memory when transitioning to a new section to avoid context confusion
+            state["short_memory"] = []
+            logger.info(f"Cleared short_memory for new section {next_section.value}")
             
             # Get context for new section
             logger.debug(f"DATABASE_DEBUG: Router calling get_context for section {next_section.value}")
@@ -188,11 +190,15 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     
     elif directive.startswith("modify:"):
         # Jump to specific section
-        section_id = directive.split(":", 1)[1]
+        section_id = directive.split(":", 1)[1].lower()  # handle case-insensitive IDs like "ICP"
         try:
             new_section = SectionID(section_id)
             logger.info(f"Jumping to section: {new_section}")
             state["current_section"] = new_section
+            
+            # Clear short_memory when jumping to a different section
+            state["short_memory"] = []
+            logger.info(f"Cleared short_memory for jumped section {new_section.value}")
             
             # Get context for new section
             logger.debug(f"DATABASE_DEBUG: Router calling get_context for modify section {new_section.value}")
@@ -229,6 +235,14 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     """
     logger.info(f"Chat agent node - Section: {state['current_section']}")
     
+    # DEBUG: Log recent message history
+    logger.info(f"MESSAGE_HISTORY_DEBUG: Last 3 messages:")
+    recent_msgs = state.get("messages", [])[-3:]
+    for i, msg in enumerate(recent_msgs):
+        msg_type = "Human" if hasattr(msg, '__class__') and 'Human' in msg.__class__.__name__ else "AI"
+        content = str(msg.content)[:100] if hasattr(msg, 'content') else str(msg)[:100]
+        logger.info(f"MESSAGE_HISTORY_DEBUG: [{i}] {msg_type}: {content}...")
+    
     # [DIAGNOSTIC] Log context packet
     logger.info(f"DEBUG_CHAT_AGENT: Context Packet received: {state.get('context_packet')}")
 
@@ -237,6 +251,7 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     
     messages: List[BaseMessage] = []
     last_human_msg: Optional[HumanMessage] = None
+    user_rating: Optional[int] = None  # capture explicit 0-5 rating if provided
 
     # 1) Hard system instruction per design doc – MUST output pure JSON.
     json_schema_instruction = (
@@ -246,17 +261,52 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         "Do NOT output markdown, code fences, or any extra commentary."
     )
     messages.append(SystemMessage(content=json_schema_instruction))
-    # If awaiting rating (router stays and user just provided info), instruct LLM to produce summary first
-    if state.get("awaiting_user_input", False):
+    
+    # Check if we should add summary instruction
+    # Only add summary if:
+    # 1. We're not already awaiting user input
+    # 2. User hasn't provided a rating
+    # 3. Current section already has some content to summarize
+    awaiting = state.get("awaiting_user_input", False)
+    current_section = state["current_section"]
+    section_state = state.get("section_states", {}).get(current_section.value, {})
+    section_has_content = bool(section_state.get("content"))
+    
+    # DEBUG: Log detailed section state info
+    logger.info(f"SUMMARY_DEBUG: Current section: {current_section.value}")
+    logger.info(f"SUMMARY_DEBUG: Section states keys: {list(state.get('section_states', {}).keys())}")
+    if section_state:
+        logger.info(f"SUMMARY_DEBUG: Section {current_section.value} state exists with status: {section_state.get('status')}")
+        logger.info(f"SUMMARY_DEBUG: Section {current_section.value} has content: {section_has_content}")
+        
+    add_summary = (not awaiting) and (user_rating is None) and section_has_content
+    
+    logger.info(f"SUMMARY_DEBUG: awaiting_user_input={awaiting}, section_has_content={section_has_content}, will_add_summary_instruction={add_summary}")
+
+    if add_summary:
         summary_instruction = (
-            "When responding, begin with a concise summary (in 3-5 bullet points) of the user's latest answers for the current section, "
-            "then ask them to rate their satisfaction with the summary on a 0-5 scale."
+            "First, generate a concise summary (3-5 bullet points) of the user's latest inputs *for the current section*. "
+            "Then, ask them to rate their satisfaction with this summary on a 0-5 scale, explaining what each range means. "
+            "IMPORTANT: Return a valid JSON object **including** a non-null `section_update` field that holds the Tiptap-JSON representation of the summary you just wrote."
         )
         messages.append(SystemMessage(content=summary_instruction))
 
     # 2) Section-specific system prompt from context packet
     if state.get("context_packet"):
         messages.append(SystemMessage(content=state["context_packet"].system_prompt))
+        
+        # Add clarification for new sections without content
+        current_section_id = state["current_section"].value
+        section_state = state.get("section_states", {}).get(current_section_id, {})
+        if not section_state or not section_state.get("content"):
+            new_section_instruction = (
+                f"IMPORTANT: You are now in the {current_section_id} section. "
+                "This is a NEW section with no content yet. "
+                "Start by following the conversation flow defined in the section prompt. "
+                "Do NOT generate section_update until you have collected actual data for THIS section. "
+                "Do NOT reference or include content from previous sections."
+            )
+            messages.append(SystemMessage(content=new_section_instruction))
 
     # 3) Recent conversation memory
     messages.extend(state.get("short_memory", [])[-10:])
@@ -267,14 +317,67 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         if isinstance(_last_msg, HumanMessage):
             messages.append(_last_msg)
             last_human_msg = _last_msg
+            # Attempt to detect if user provided a simple numeric rating 0-5
+            if isinstance(_last_msg.content, list):
+                for item in _last_msg.content:
+                    if item.get("type") == "text":
+                        txt = item.get("text", "").strip()
+                        if txt.isdigit() and txt in {"0","1","2","3","4","5"}:
+                            user_rating = int(txt)
+                        break
+            else:
+                txt = str(_last_msg.content).strip()
+                if txt.isdigit() and txt in {"0","1","2","3","4","5"}:
+                    user_rating = int(txt)
+
+    # Check if we're in a situation where user rated but section has no content
+    if user_rating is not None and current_section == SectionID.INTERVIEW:
+        section_state = state.get("section_states", {}).get(current_section.value, {})
+        if not section_state or not section_state.get("content"):
+            logger.warning(f"User provided rating {user_rating} but {current_section.value} has no content saved!")
+            # Add instruction to re-display summary WITH section_update
+            messages.append(SystemMessage(content=(
+                "CRITICAL ERROR: The user has provided a rating, but the Interview section has no saved content! "
+                "You MUST re-display the complete summary WITH section_update before proceeding. "
+                "This is causing a loop because the system cannot move forward without saved content. "
+                "Display the full summary again and include section_update with all the information you've collected."
+            )))
+    
+    # If user provided an explicit rating, override LLM output requirements
+    if user_rating is not None:
+        # fabricate a minimal agent output – we don't need LLM call for simple acknowledgement
+        current_section = state["current_section"]
+        
+        # According to design doc, rating happens at the END of each section
+        # High rating (>=3) should always trigger NEXT to move to next section
+        calculated_directive = RouterDirective.NEXT if user_rating >= 3 else RouterDirective.STAY
+        
+        if calculated_directive == RouterDirective.NEXT:
+            # Get the next section name for the transition message
+            from .prompts import get_next_section, SECTION_TEMPLATES
+            next_section = get_next_section(current_section)
+            if next_section:
+                next_section_name = SECTION_TEMPLATES.get(next_section.value).name
+                reply_msg = f"Thank you for your rating! Let's move on to the next section: {next_section_name}."
+            else:
+                reply_msg = "Thank you for your rating! We've completed all sections."
+        else:
+            # Low rating means we need to refine current section
+            reply_msg = "Thank you for your rating! Let's refine this section together – what would you like to adjust?"
+        
+        agent_output = ChatAgentOutput(reply=reply_msg, router_directive=calculated_directive.value, score=user_rating, section_update=None)
+        state["agent_output"] = agent_output
+        state["router_directive"] = calculated_directive
+        state["awaiting_user_input"] = (calculated_directive==RouterDirective.STAY)
+        # append to history
+        state["messages"].append(AIMessage(content=agent_output.reply))
+        return state
 
     try:
-        max_attempts = 1
-        output_data = None
         # Force OpenAI to return JSON in one shot
         openai_args = {"response_format": {"type": "json_object"}}
         
-        for attempt in range(max_attempts):
+        for attempt in range(1): # Changed max_attempts to 1 as per original code
             response = await llm.ainvoke(messages, **openai_args)
             content = response.content if hasattr(response, "content") else response
 
@@ -313,6 +416,39 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
 
         agent_output = ChatAgentOutput(**output_data)
 
+        # DEBUG: Log the full agent output
+        logger.info(f"AGENT_OUTPUT_DEBUG: Full output from LLM:")
+        logger.info(f"AGENT_OUTPUT_DEBUG: - reply: {agent_output.reply[:100]}...")
+        logger.info(f"AGENT_OUTPUT_DEBUG: - router_directive: {agent_output.router_directive}")
+        logger.info(f"AGENT_OUTPUT_DEBUG: - score: {agent_output.score}")
+        logger.info(f"AGENT_OUTPUT_DEBUG: - has section_update: {bool(agent_output.section_update)}")
+        
+        if agent_output.section_update:
+            logger.warning(f"AGENT_OUTPUT_DEBUG: Section update generated for section {state['current_section'].value}")
+            # Check if this looks like Interview content being saved to ICP
+            if state['current_section'] == SectionID.ICP:
+                # Check for Interview-specific fields in ICP section update
+                if hasattr(agent_output.section_update, 'content'):
+                    content_str = str(agent_output.section_update.content)
+                    if any(term in content_str for term in ["Specialty:", "Proud Achievement:", "Notable Partners:"]):
+                        logger.error("ERROR! ICP section is getting Interview content!")
+            
+            # Additional check for Interview section
+            if state['current_section'] == SectionID.INTERVIEW:
+                # Ensure Interview section saves actual content, not just score
+                if hasattr(agent_output.section_update, 'content'):
+                    content_str = str(agent_output.section_update.content)
+                    # Check if it contains actual interview data
+                    if not any(term in content_str for term in ["Name:", "Company:", "Industry:", "Specialty:"]):
+                        logger.warning("WARNING! Interview section_update doesn't contain actual interview data!")
+                        # Check if we're asking for rating without showing summary
+                        if "satisfied" in agent_output.reply.lower() and "summary" in agent_output.reply.lower():
+                            if "Here's what I know about you" not in agent_output.reply:
+                                logger.error("ERROR! Asking for satisfaction rating without showing summary first!")
+        
+        # DEBUG: Check state consistency
+        logger.info(f"AGENT_OUTPUT_DEBUG: Current section_states: {list(state.get('section_states', {}).keys())}")
+
         # CRITICAL FIX: Validate score input
         # Only accept score if the user's last message is EXACTLY a single digit 0-5
         if agent_output.score is not None:
@@ -337,15 +473,19 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
 
         # Determine router directive based on score, per design doc
         if agent_output.score is not None:
-            calculated_directive = (
-                RouterDirective.NEXT if agent_output.score >= 3 else RouterDirective.STAY
-            )
+            # According to design doc, rating happens at the END of each section
+            # High rating (>=3) should trigger NEXT to move to next section
+            if agent_output.score >= 3:
+                calculated_directive = RouterDirective.NEXT
+            else:
+                calculated_directive = RouterDirective.STAY
+                
             state["router_directive"] = calculated_directive
             
             # If score-based logic says NEXT but LLM didn't generate transition message,
             # override the reply to be a transition message
-            if (calculated_directive == RouterDirective.NEXT):
-                # Predict what the next section will be AFTER current section is marked as done
+            if calculated_directive == RouterDirective.NEXT:
+                # Predict what the next section will be
                 current_section = state["current_section"]
                 predicted_next = get_next_section(current_section)
                 
@@ -361,8 +501,30 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
 
         state["agent_output"] = agent_output
 
-        # If we expect user input next, mark flag
-        state["awaiting_user_input"] = (state["router_directive"] == RouterDirective.STAY)
+        # --- MVP Fallback: ensure reply包含明确提问 -----------------------
+        need_question = (
+            state["router_directive"] == RouterDirective.STAY
+            and agent_output.score is None
+        )
+
+        if need_question:
+            import re
+            # 如果 reply 中既没有问号也没有明确的指令词，则追加提示
+            has_question = re.search(r"[?？]", agent_output.reply, re.IGNORECASE)
+            has_instruction = any(word in agent_output.reply.lower() for word in [
+                "please", "provide", "describe", "tell", "share", "what", "how", "when", "where", "why"
+            ])
+            
+            if not has_question and not has_instruction:
+                # 只有在真的没有明确指令时才添加兜底文本
+                agent_output.reply += (
+                    "\n\nPlease provide your response to continue."
+                )
+
+        # ---------------------------------------------------------------
+
+        # If we expect user input next, mark flag (MVP logic uses need_question)
+        state["awaiting_user_input"] = need_question
 
         # Add AI reply to conversation history
         state["messages"].append(AIMessage(content=agent_output.reply))
@@ -453,6 +615,18 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
         logger.info(f"DATABASE_DEBUG: Processing section_update for section {section_id}")
         logger.debug(f"DATABASE_DEBUG: Section update content type: {type(agent_out.section_update)}")
         
+        # DEBUG: Log what content is being saved to which section
+        logger.warning(f"CONTENT_DEBUG: About to save content to section {section_id}")
+        if hasattr(agent_out.section_update, 'content') and hasattr(agent_out.section_update.content, 'content'):
+            # Try to extract first paragraph text for debugging
+            try:
+                first_para = agent_out.section_update.content.content[0]
+                if hasattr(first_para, 'content') and first_para.content:
+                    first_text = first_para.content[0].get('text', 'No text')
+                    logger.warning(f"CONTENT_DEBUG: First paragraph starts with: {first_text[:100]}...")
+            except:
+                logger.warning(f"CONTENT_DEBUG: Could not extract content preview")
+        
         # Save to database using save_section tool
         logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section with structured content")
         logger.debug("DATABASE_DEBUG: Calling save_section tool with structured content")
@@ -534,52 +708,60 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             else:
                 # If section doesn't exist in local state but we have a score, create minimal entry
                 if agent_out.score is not None:
-                    logger.debug(f"DATABASE_DEBUG: Section {score_section_id} not in local state, creating minimal entry with score")
-                    # Create minimal content indicating section was scored
-                    minimal_content = {
-                        "type": "doc",
-                        "content": [
-                            {
-                                "type": "paragraph",
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": f"Section scored: {agent_out.score}/5"
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                    
-                    # Save to database
-                    logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section to create new minimal section {score_section_id}")
-                    logger.debug("DATABASE_DEBUG: Calling save_section to create new minimal section entry")
-                    
-                    # [CRITICAL DEBUG] Log parameters for BRANCH 2B new section
-                    computed_status_2b = _status_from_output(agent_out.score, agent_out.router_directive)
-                    logger.info(f"SAVE_SECTION_DEBUG: BRANCH 2B calling save_section with:")
-                    logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
-                    logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status_2b} (type: {type(computed_status_2b)})")
-                    
-                    save_result = await save_section.ainvoke({
-                        "user_id": state["user_id"],
-                        "doc_id": state["doc_id"],
-                        "section_id": score_section_id,
-                        "content": minimal_content,
-                        "score": agent_out.score,
-                        "status": computed_status_2b,
-                    })
-                    logger.debug(f"DATABASE_DEBUG: Minimal entry save_section returned: {bool(save_result)}")
-                    
-                    # Update local state
-                    state["section_states"][score_section_id] = {
-                        "section_id": score_section_id,
-                        "content": minimal_content,
-                        "score": agent_out.score,
-                        "status": _status_from_output(agent_out.score, agent_out.router_directive),
-                    }
-                    logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 2B COMPLETED: Created new minimal section {score_section_id}")
-                    logger.info(f"DATABASE_DEBUG: ✅ Created new minimal section {score_section_id} with score {agent_out.score}")
+                    # Special handling for Interview section - should never reach here with just a score
+                    if score_section_id == SectionID.INTERVIEW.value:
+                        logger.error(f"ERROR! Interview section received score {agent_out.score} without proper section_update containing the summary!")
+                        logger.error("Interview section MUST include a complete summary before asking for rating.")
+                        # Don't save minimal content for Interview section
+                        logger.info(f"SAVE_SECTION_DEBUG: ❌ BRANCH 2B SKIPPED: Interview section must have proper content, not just score")
+                    else:
+                        # For other sections, minimal score-only save might be acceptable
+                        logger.debug(f"DATABASE_DEBUG: Section {score_section_id} not in local state, creating minimal entry with score")
+                        # Create minimal content indicating section was scored
+                        minimal_content = {
+                            "type": "doc",
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": f"Section scored: {agent_out.score}/5"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                        
+                        # Save to database
+                        logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section to create new minimal section {score_section_id}")
+                        logger.debug("DATABASE_DEBUG: Calling save_section to create new minimal section entry")
+                        
+                        # [CRITICAL DEBUG] Log parameters for BRANCH 2B new section
+                        computed_status_2b = _status_from_output(agent_out.score, agent_out.router_directive)
+                        logger.info(f"SAVE_SECTION_DEBUG: BRANCH 2B calling save_section with:")
+                        logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
+                        logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status_2b} (type: {type(computed_status_2b)})")
+                        
+                        save_result = await save_section.ainvoke({
+                            "user_id": state["user_id"],
+                            "doc_id": state["doc_id"],
+                            "section_id": score_section_id,
+                            "content": minimal_content,
+                            "score": agent_out.score,
+                            "status": computed_status_2b,
+                        })
+                        logger.debug(f"DATABASE_DEBUG: Minimal entry save_section returned: {bool(save_result)}")
+                        
+                        # Update local state
+                        state["section_states"][score_section_id] = {
+                            "section_id": score_section_id,
+                            "content": minimal_content,
+                            "score": agent_out.score,
+                            "status": _status_from_output(agent_out.score, agent_out.router_directive),
+                        }
+                        logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 2B COMPLETED: Created new minimal section {score_section_id}")
+                        logger.info(f"DATABASE_DEBUG: ✅ Created new minimal section {score_section_id} with score {agent_out.score}")
                 else:
                     logger.info(f"SAVE_SECTION_DEBUG: ❌ BRANCH 2C SKIPPED: No score and section {score_section_id} doesn't exist locally")
                     logger.debug(f"DATABASE_DEBUG: No score provided and section {score_section_id} doesn't exist locally, skipping")
@@ -698,15 +880,15 @@ def build_value_canvas_graph():
     graph = StateGraph(ValueCanvasState)
     
     # Add nodes
-    # initialize_node removed per design; router is now first node
-    # graph.add_node("initialize", initialize_node)
+    graph.add_node("initialize", initialize_node)
     graph.add_node("router", router_node)
     graph.add_node("chat_agent", chat_agent_node)
     graph.add_node("memory_updater", memory_updater_node)
     graph.add_node("implementation", implementation_node)
     
     # Add edges
-    graph.add_edge(START, "router")
+    graph.add_edge(START, "initialize")
+    graph.add_edge("initialize", "router")
     
     # Router can go to chat agent or implementation
     graph.add_conditional_edges(
