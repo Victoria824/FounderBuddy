@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from langchain_core.messages import HumanMessage
 
-from agents.value_canvas_agent import graph, initialize_value_canvas_state
+from agents.value_canvas.agent import graph, initialize_value_canvas_state
 
 
 async def test_value_canvas_agent():

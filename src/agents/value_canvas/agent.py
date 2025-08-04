@@ -13,7 +13,7 @@ from langgraph.prebuilt import ToolNode
 from core.llm import get_model
 from core.settings import settings
 
-from agents.value_canvas_models import (
+from .models import (
     ChatAgentOutput,
     ContextPacket,
     RouterDirective,
@@ -22,11 +22,12 @@ from agents.value_canvas_models import (
     ValueCanvasData,
     ValueCanvasState,
 )
-from agents.value_canvas_prompts import (
+from .prompts import (
     get_next_section,
     get_next_unfinished_section,
+    SECTION_TEMPLATES,
 )
-from agents.value_canvas_tools import (
+from .tools import (
     create_tiptap_content,
     export_checklist,
     extract_plain_text,
@@ -134,6 +135,10 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
         f"Router node - Current section: {state['current_section']}, Directive: {state['router_directive']}"
     )
     
+    # [DIAGNOSTIC] Log the entire state for debugging
+    state_for_log = state.copy()
+    logger.info(f"DEBUG_ROUTER_ENTRY: Full state dump: {state_for_log}")
+
     # Process router directive
     directive = state.get("router_directive", RouterDirective.STAY)
     
@@ -144,7 +149,9 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     
     elif directive == RouterDirective.NEXT:
         # Find next unfinished section
+        logger.info(f"DEBUG: Preparing to find next section. Current section states: {state.get('section_states', {})}")
         next_section = get_next_unfinished_section(state.get("section_states", {}))
+        logger.info(f"DEBUG: get_next_unfinished_section decided the next section is: {next_section}")
         
         if next_section:
             logger.info(f"Moving to next section: {next_section}")
@@ -208,6 +215,9 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     """
     logger.info(f"Chat agent node - Section: {state['current_section']}")
     
+    # [DIAGNOSTIC] Log context packet
+    logger.info(f"DEBUG_CHAT_AGENT: Context Packet received: {state.get('context_packet')}")
+
     # Get LLM - no tools for chat agent per design doc
     llm = get_model(config["configurable"].get("model", settings.DEFAULT_MODEL))
     
@@ -289,6 +299,28 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
 
         agent_output = ChatAgentOutput(**output_data)
 
+        # CRITICAL FIX: Validate score input
+        # Only accept score if the user's last message is EXACTLY a single digit 0-5
+        if agent_output.score is not None:
+            # Get the last user message text
+            user_text = ""
+            if last_human_msg and last_human_msg.content:
+                if isinstance(last_human_msg.content, list):
+                    for item in last_human_msg.content:
+                        if item.get("type") == "text":
+                            user_text = item.get("text", "").strip()
+                            break
+                else:
+                    user_text = str(last_human_msg.content).strip()
+            
+            # Check if the user input is EXACTLY a single digit 0-5
+            import re
+            if not re.match(r'^[0-5]$', user_text):
+                # User didn't provide a valid score, override the LLM's decision
+                logger.info(f"DEBUG: Invalid score input '{user_text}', overriding LLM score")
+                agent_output.score = None
+                agent_output.router_directive = RouterDirective.STAY.value
+
         # Determine router directive based on score, per design doc
         if agent_output.score is not None:
             calculated_directive = (
@@ -298,10 +330,17 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
             
             # If score-based logic says NEXT but LLM didn't generate transition message,
             # override the reply to be a transition message
-            if (calculated_directive == RouterDirective.NEXT and 
-                "move on" not in agent_output.reply.lower() and 
-                "next section" not in agent_output.reply.lower()):
-                agent_output.reply = "Great! Let's move on to the next section."
+            if (calculated_directive == RouterDirective.NEXT):
+                # Predict what the next section will be AFTER current section is marked as done
+                current_section = state["current_section"]
+                predicted_next = get_next_section(current_section)
+                
+                if predicted_next:
+                    next_section_name = SECTION_TEMPLATES.get(predicted_next.value).name
+                    agent_output.reply = f"Great! Let's move on to the next section: {next_section_name}."
+                else:
+                    agent_output.reply = "Great! We've completed all sections."
+
         else:
             # Fallback to value supplied by model (may be stay/next/modify)
             state["router_directive"] = agent_output.router_directive
@@ -320,6 +359,9 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
             base_mem.append(last_human_msg)
         base_mem.append(AIMessage(content=agent_output.reply))
         state["short_memory"] = base_mem
+
+        # [DIAGNOSTIC] Log the output from the agent
+        logger.info(f"DEBUG_CHAT_AGENT: Agent output generated: {state.get('agent_output')}")
 
     except Exception as e:
         logger.error(f"Failed to parse structured output: {e}\nResponse: {response.content if 'response' in locals() else ''}")
@@ -350,6 +392,9 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
     logger.info("Memory updater node")
     
     agent_out = state.get("agent_output")
+
+    # [DIAGNOSTIC] Log state before update
+    logger.info(f"DEBUG_MEMORY_UPDATER: section_states BEFORE update: {state.get('section_states', {})}")
 
     # Decide status based on score and directive
     def _status_from_output(score, directive):
@@ -387,10 +432,18 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
         
     # Even if there is no section_update (评分轮)，也要更新分数与状态
     if agent_out and not agent_out.section_update:
-        section_id = state["current_section"].value
-        state["section_states"].setdefault(section_id, {})
-        state["section_states"][section_id]["score"] = agent_out.score
-        state["section_states"][section_id]["status"] = _status_from_output(agent_out.score, agent_out.router_directive)
+        # BUG FIX: Do not use state["current_section"] as it might have been updated by the router already.
+        # Instead, use the section_id from the context_packet that the chat_agent used to generate the score.
+        if state.get("context_packet"):
+            section_id = state["context_packet"].section_id.value
+            state["section_states"].setdefault(section_id, {})
+            state["section_states"][section_id]["score"] = agent_out.score
+            state["section_states"][section_id]["status"] = _status_from_output(agent_out.score, agent_out.router_directive)
+        else:
+            logger.warning("Cannot update score as context_packet is missing.")
+
+    # [DIAGNOSTIC] Log state after update
+    logger.info(f"DEBUG_MEMORY_UPDATER: section_states AFTER update: {state.get('section_states', {})}")
 
     return state
 

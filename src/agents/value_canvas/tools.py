@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.tools import tool
 from supabase import create_client, Client
 
-from agents.value_canvas_models import (
+from .models import (
     ContextPacket,
     SectionContent,
     SectionID,
@@ -18,7 +18,7 @@ from agents.value_canvas_models import (
     TiptapDocument,
     ValidationRule,
 )
-from agents.value_canvas_prompts import SECTION_PROMPTS, SECTION_TEMPLATES
+from .prompts import SECTION_PROMPTS, SECTION_TEMPLATES
 from core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -171,6 +171,13 @@ async def save_section(
     """
     logger.info(f"Saving section {section_id} for user {user_id}, doc {doc_id}")
     
+    # [DIAGNOSTIC] Log all parameters passed to save_section
+    logger.info(
+        f"DEBUG_SAVE_SECTION: Parameters received: "
+        f"user_id={user_id}, doc_id={doc_id}, section_id='{section_id}', "
+        f"score={score}, status='{status}'"
+    )
+
     current_time = datetime.utcnow().isoformat() + "Z"
     
     # Execute query using Supabase SDK

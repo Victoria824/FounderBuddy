@@ -11,7 +11,7 @@ from agents.knowledge_base_agent import kb_agent
 from agents.langgraph_supervisor_agent import langgraph_supervisor_agent
 from agents.rag_assistant import rag_assistant
 from agents.research_assistant import research_assistant
-from agents.value_canvas_agent import graph as value_canvas_agent
+from agents.value_canvas.agent import graph as value_canvas_agent
 from schema import AgentInfo
 
 DEFAULT_AGENT = "research-assistant"

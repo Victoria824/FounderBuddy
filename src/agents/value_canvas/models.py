@@ -1,4 +1,4 @@
-"""Pydantic models for Value Canvas Agent."""
+'''Pydantic models for Value Canvas Agent.'''
 
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
@@ -29,7 +29,7 @@ class SectionID(str, Enum):
     """Value Canvas section identifiers."""
     # Initial Interview
     INTERVIEW = "interview"
-    
+
     # Core Value Canvas Sections (9 total)
     ICP = "icp"  # Ideal Customer Persona
     PAIN_1 = "pain_1"
@@ -41,10 +41,10 @@ class SectionID(str, Enum):
     SIGNATURE_METHOD = "signature_method"
     MISTAKES = "mistakes"
     PRIZE = "prize"
-    
+
     # Deep Fear (internal understanding)
     DEEP_FEAR = "deep_fear"
-    
+
     # Implementation/Export
     IMPLEMENTATION = "implementation"
 
@@ -94,9 +94,9 @@ class ContextPacket(BaseModel):
 
 class ValueCanvasData(BaseModel):
     """Complete Value Canvas data structure."""
-    # Initial interview data
+    # Basic information from initial interview
     client_name: Optional[str] = None
-    preferred_name: Optional[str] = None
+    preferred_name: Optional[str] = None  # 添加昵称字段
     company_name: Optional[str] = None
     industry: Optional[str] = None
     standardized_industry: Optional[str] = None
@@ -104,10 +104,11 @@ class ValueCanvasData(BaseModel):
     career_highlight: Optional[str] = None
     client_outcomes: Optional[str] = None
     awards_media: Optional[str] = None
-    published_content: Optional[Dict[str, Any]] = None
+    published_content: Optional[str] = None
+    published_content_types: Optional[str] = None  # 添加发布内容类型字段
     specialized_skills: Optional[str] = None
     notable_partners: Optional[str] = None
-    
+
     # ICP data
     icp_standardized_role: Optional[str] = None
     icp_demographics: Optional[str] = None
@@ -117,50 +118,50 @@ class ValueCanvasData(BaseModel):
     icp_affordability: Optional[str] = None
     icp_impact: Optional[str] = None
     icp_access: Optional[str] = None
-    
+
     # Pain points (3)
     pain1_symptom: Optional[str] = None
     pain1_struggle: Optional[str] = None
     pain1_cost: Optional[str] = None
     pain1_consequence: Optional[str] = None
-    
+
     pain2_symptom: Optional[str] = None
     pain2_struggle: Optional[str] = None
     pain2_cost: Optional[str] = None
     pain2_consequence: Optional[str] = None
-    
+
     pain3_symptom: Optional[str] = None
     pain3_struggle: Optional[str] = None
     pain3_cost: Optional[str] = None
     pain3_consequence: Optional[str] = None
-    
+
     # Deep Fear
     deep_fear: Optional[str] = None
-    
+
     # Payoffs (3)
     payoff1_objective: Optional[str] = None
     payoff1_desire: Optional[str] = None
     payoff1_without: Optional[str] = None
     payoff1_resolution: Optional[str] = None
-    
+
     payoff2_objective: Optional[str] = None
     payoff2_desire: Optional[str] = None
     payoff2_without: Optional[str] = None
     payoff2_resolution: Optional[str] = None
-    
+
     payoff3_objective: Optional[str] = None
     payoff3_desire: Optional[str] = None
     payoff3_without: Optional[str] = None
     payoff3_resolution: Optional[str] = None
-    
+
     # Signature Method
     method_name: Optional[str] = None
     sequenced_principles: Optional[List[str]] = None
     principle_descriptions: Optional[Dict[str, str]] = None
-    
+
     # Mistakes
     mistakes: Optional[List[Dict[str, Any]]] = None
-    
+
     # Prize
     prize_category: Optional[str] = None
     prize_statement: Optional[str] = None
@@ -180,7 +181,7 @@ class ValueCanvasState(MessagesState):
     # User and document identification
     user_id: str = "studio-user"
     doc_id: str = "studio-doc"
-    
+
     # Navigation and progress
     current_section: SectionID = SectionID.INTERVIEW
     context_packet: Optional[ContextPacket] = None
@@ -188,18 +189,18 @@ class ValueCanvasState(MessagesState):
     # 初次进入希望 Router 直接调用 get_context，所以默认 NEXT
     router_directive: str = RouterDirective.NEXT
     finished: bool = False
-    
+
     # Value Canvas data
     canvas_data: ValueCanvasData = Field(default_factory=ValueCanvasData)
-    
+
     # Memory management
     short_memory: List[BaseMessage] = Field(default_factory=list)
-    
+
     # Agent output
     agent_output: Optional[ChatAgentOutput] = None
     # Flag indicating the agent has asked a question and is waiting for user's reply
     awaiting_user_input: bool = False
-    
+
     # Error tracking
     error_count: int = 0
     last_error: Optional[str] = None
@@ -221,4 +222,4 @@ class SectionTemplate(BaseModel):
     system_prompt_template: str
     validation_rules: List[ValidationRule] = Field(default_factory=list)
     required_fields: List[str] = Field(default_factory=list)
-    next_section: Optional[SectionID] = None
+    next_section: Optional[SectionID] = None 
