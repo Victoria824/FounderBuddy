@@ -5,8 +5,12 @@ import uvicorn
 from dotenv import load_dotenv
 
 from core import settings
+from core.logging_config import setup_logging
 
 load_dotenv()
+
+# Setup logging configuration
+setup_logging()
 
 if __name__ == "__main__":
     # Set Compatible event loop policy on Windows Systems.

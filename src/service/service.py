@@ -19,6 +19,7 @@ from langgraph.types import Command, Interrupt
 from langsmith import Client as LangsmithClient
 
 from agents import DEFAULT_AGENT, AgentGraph, get_agent, get_all_agent_info
+from agents.value_canvas.agent import initialize_value_canvas_state
 from core import settings
 from memory import initialize_database, initialize_store
 from schema import (
@@ -27,9 +28,11 @@ from schema import (
     ChatMessage,
     Feedback,
     FeedbackResponse,
+    InvokeResponse,
     ServiceMetadata,
     StreamInput,
     UserInput,
+
 )
 from service.utils import (
     convert_message_content_to_string,
@@ -106,18 +109,47 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
     Returns kwargs for agent invocation and the run_id.
     """
     run_id = uuid4()
-    thread_id = user_input.thread_id or str(uuid4())
-    user_id = user_input.user_id or str(uuid4())
-
-    configurable = {"thread_id": thread_id, "model": user_input.model, "user_id": user_id}
+    thread_id = user_input.thread_id
+    user_id = user_input.user_id
 
     callbacks = []
     if settings.LANGFUSE_TRACING:
-        # Initialize Langfuse CallbackHandler for Langchain (tracing)
         langfuse_handler = CallbackHandler()
-
         callbacks.append(langfuse_handler)
 
+    if not thread_id:
+        # This is a new conversation, so we need to initialize a new state
+        initial_state = await initialize_value_canvas_state(user_id=user_id)
+        
+        # Determine the initial user_id and doc_id from the newly created state
+        user_id = initial_state.get("user_id")
+        doc_id = initial_state.get("doc_id")
+
+        # Create a configuration for the new thread
+        config = RunnableConfig(
+            configurable={
+                "model": user_input.model,
+                "user_id": user_id,
+                "doc_id": doc_id,
+            },
+            run_id=run_id,
+            callbacks=callbacks,
+        )
+        
+        # Save the new state to the checkpointer to get a thread_id
+        saved_config = await agent.checkpointer.aput(initial_state, config) # type: ignore
+        thread_id = saved_config["configurable"]["thread_id"]
+        logger.info(f"Initialized new thread with ID: {thread_id}")
+    else:
+        # This is an existing conversation, so we load the state
+        logger.info(f"Loading existing thread with ID: {thread_id}")
+
+    # Now we have a thread_id, so we can configure the agent invocation
+    configurable = {"thread_id": thread_id, "model": user_input.model}
+    
+    if user_id:
+        configurable["user_id"] = user_id
+        
     if user_input.agent_config:
         if overlap := configurable.keys() & user_input.agent_config.keys():
             raise HTTPException(
@@ -140,7 +172,6 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
 
     input: Command | dict[str, Any]
     if interrupted_tasks:
-        # assume user input is response to resume agent execution from interrupt
         input = Command(resume=user_input.message)
     else:
         input = {"messages": [HumanMessage(content=user_input.message)]}
@@ -155,7 +186,7 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
 
 @router.post("/{agent_id}/invoke")
 @router.post("/invoke")
-async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatMessage:
+async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> InvokeResponse:
     """
     Invoke an agent with user input to retrieve a final response.
 
@@ -188,7 +219,11 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatMe
             raise ValueError(f"Unexpected response type: {response_type}")
 
         output.run_id = str(run_id)
-        return output
+        return InvokeResponse(
+            output=output,
+            thread_id=kwargs["config"]["configurable"]["thread_id"],
+            user_id=kwargs["config"]["configurable"]["user_id"],
+        )
     except Exception as e:
         logger.error(f"An exception occurred: {e}")
         raise HTTPException(status_code=500, detail="Unexpected error")

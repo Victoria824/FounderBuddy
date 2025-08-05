@@ -173,3 +173,19 @@ class ChatHistoryInput(BaseModel):
 
 class ChatHistory(BaseModel):
     messages: list[ChatMessage]
+
+
+class InvokeResponse(BaseModel):
+    """Response from an agent invocation."""
+
+    output: ChatMessage = Field(
+        description="The output of the agent.",
+    )
+    thread_id: str = Field(
+        description="Thread ID to persist and continue a multi-turn conversation.",
+        examples=["847c6285-8fc9-4560-a83f-4e6285809254"],
+    )
+    user_id: str = Field(
+        description="User ID to persist and continue a conversation across multiple threads.",
+        examples=["847c6285-8fc9-4560-a83f-4e6285809254"],
+    )

@@ -423,7 +423,9 @@ I'd suggest these possible client roles might be relevant for you:
 
 Which of these best describes your ideal client? Or specify a different role if none of these fit.
 
-Remember: After role selection, we'll continue with demographics, geography, viability checks, and nickname - stay in this section until all steps are complete.""",
+Remember: After role selection, we'll continue with demographics, geography, viability checks, and nickname - stay in this section until all steps are complete.
+
+CRITICAL REMINDER: When showing the final ICP summary and asking for rating, you MUST include section_update with the complete ICP data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="icp_nickname",
@@ -517,7 +519,13 @@ Example of properly formatted section_update for Pain Points:
     }
   }
 }
-```""",
+```
+
+CRITICAL REMINDER: When you show the summary and ask for rating, you MUST include BOTH:
+1. The summary in the "reply" field (what the user sees)
+2. The complete data in the "section_update" field (what gets saved)
+
+Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="pain1_symptom",
@@ -588,6 +596,8 @@ CRITICAL: You MUST collect ALL FOUR elements before asking for rating:
 
 ONLY after collecting all four elements, show a complete summary and ask for satisfaction rating.
 
+CRITICAL REMINDER: When you show the summary and ask for rating, you MUST include section_update with the complete Pain Point data (see example format above). Without section_update, the user's progress will NOT be saved!
+
 Note: If the user provides unrelated information (like their expertise or background), politely acknowledge it but redirect them back to Pain Point 2.""",
         validation_rules=[
             ValidationRule(
@@ -631,7 +641,9 @@ CRITICAL: You MUST collect ALL FOUR elements before asking for rating:
 3. Cost (immediate impact)
 4. Consequence (future impact)
 
-ONLY after collecting all four elements, show a complete summary and ask for satisfaction rating.""",
+ONLY after collecting all four elements, show a complete summary and ask for satisfaction rating.
+
+CRITICAL REMINDER: When you show the summary and ask for rating, you MUST include section_update with the complete Pain Point data (see example format above). Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="pain3_symptom",
@@ -656,7 +668,9 @@ Important: The Deep Fear is for your understanding only. This isn't client-facin
 
 Think about your {icp_nickname} when they're experiencing {pain1_symptom}, {pain2_symptom}, or {pain3_symptom}.
 
-What question are they privately asking about themselves? What self-doubt surfaces when these frustrations hit?""",
+What question are they privately asking about themselves? What self-doubt surfaces when these frustrations hit?
+
+CRITICAL REMINDER: When showing the Deep Fear and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="deep_fear",
@@ -681,7 +695,9 @@ For Payoff 1 (mirroring {pain1_symptom}), we need:
 3. A "without" statement addressing common objections
 4. A resolution that directly references the pain symptom
 
-Each Payoff should directly mirror a Pain point, creating perfect symmetry between problem and solution.""",
+Each Payoff should directly mirror a Pain point, creating perfect symmetry between problem and solution.
+
+CRITICAL REMINDER: When showing the Payoff summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="payoff1_objective",
@@ -704,7 +720,9 @@ We need:
 1. A 1-3 word objective
 2. A description of what they specifically want
 3. A "without" statement addressing common objections
-4. A resolution that directly references the pain symptom""",
+4. A resolution that directly references the pain symptom
+
+CRITICAL REMINDER: When showing the Payoff summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="payoff2_objective",
@@ -727,7 +745,9 @@ We need:
 1. A 1-3 word objective
 2. A description of what they specifically want
 3. A "without" statement addressing common objections
-4. A resolution that directly references the pain symptom""",
+4. A resolution that directly references the pain symptom
+
+CRITICAL REMINDER: When showing the Payoff summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="payoff3_objective",
@@ -773,7 +793,9 @@ For each principle, provide:
 Challenge generic approaches: "What makes this method distinctly YOURS rather than industry-standard advice?"
 Push for intellectual property: "Could only YOU have developed this approach based on your unique experience?"
 
-Remember: Your {icp_nickname} should read these principles and think "This is exactly the systematic approach I've been missing!""",
+Remember: Your {icp_nickname} should read these principles and think "This is exactly the systematic approach I've been missing!"
+
+CRITICAL REMINDER: When showing the Signature Method summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="method_name",
@@ -830,7 +852,9 @@ Surface hidden causes: "What's the non-obvious reason this pain keeps happening 
 Identify flawed thinking: "What do they believe that's actually making this worse?"
 Expose counterproductive actions: "What are they doing that feels right but creates more problems?"
 
-Let's start by identifying the mistakes that correspond to each of your method principles and pain points.""",
+Let's start by identifying the mistakes that correspond to each of your method principles and pain points.
+
+CRITICAL REMINDER: When showing the Mistakes summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="mistakes",
@@ -859,7 +883,9 @@ Different Prize categories:
 
 Push for magnetism: "Is this distinctive enough that people remember it after one conversation?"
 Test for resonance: "Does this capture the emotional essence of transformation, not just logical benefits?"
-Validate ownership: "Could your competitors claim this, or is it distinctly yours?\"""",
+Validate ownership: "Could your competitors claim this, or is it distinctly yours?\"
+
+CRITICAL REMINDER: When showing the Prize and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
                 field_name="prize_statement",

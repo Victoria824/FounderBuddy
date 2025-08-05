@@ -98,13 +98,21 @@ async def get_context(
     section_prompt = template.system_prompt_template
     
     # Render template with canvas data if provided
-    if canvas_data:
-        try:
-            section_prompt = section_prompt.format(**canvas_data)
-        except KeyError as e:
-            logger.warning(f"Missing keys in canvas_data for template rendering: {e}")
-            # If some keys are missing, use what we have
-            pass
+    # --- SAFE PARTIAL TEMPLATE RENDERING ---------------------------------
+    if canvas_data is None:
+        canvas_data = {}
+
+    # Allow partial rendering: missing keys will be replaced with empty string
+    from collections import UserDict
+
+    class _SafeDict(UserDict):
+        def __missing__(self, key):
+            return ""
+
+    try:
+        section_prompt = section_prompt.format_map(_SafeDict(canvas_data))
+    except Exception as e:
+        logger.warning(f"TEMPLATE_DEBUG: Failed safe render of section_prompt: {e}")
     
     system_prompt = f"{base_prompt}\\n\\n---\\n\\n{section_prompt}"
     

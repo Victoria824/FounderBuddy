@@ -70,17 +70,19 @@ async def initialize_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     This is the first node in the graph to handle LangGraph Studio's incomplete state.
     """
     logger.info("Initialize node - Setting up default values")
-    
-    # Ensure all required fields have default values
-    import uuid
+
+    # This node no longer creates user_id or doc_id.
+    # That responsibility is now in service.py, which should call
+    # initialize_value_canvas_state for new conversations.
     if "user_id" not in state or not state["user_id"]:
-        # Generate a real UUID for user_id
-        state["user_id"] = str(uuid.uuid4())
-        logger.info(f"Generated new user_id: {state['user_id']}")
+        logger.warning("Initialize node running without a user_id.")
+        # Provide a temporary ID to prevent downstream errors, but this is a sign of a problem.
+        state["user_id"] = "temp-user-id"
     if "doc_id" not in state or not state["doc_id"]:
-        # Generate a real UUID for doc_id
-        state["doc_id"] = str(uuid.uuid4())
-        logger.info(f"Generated new doc_id: {state['doc_id']}")
+        logger.warning("Initialize node running without a doc_id.")
+        state["doc_id"] = "temp-doc-id"
+
+    # Ensure all other required fields have default values
     if "current_section" not in state:
         state["current_section"] = SectionID.INTERVIEW
     if "router_directive" not in state:
@@ -294,6 +296,41 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     # 2) Section-specific system prompt from context packet
     if state.get("context_packet"):
         messages.append(SystemMessage(content=state["context_packet"].system_prompt))
+        
+        # Add progress information based on section_states
+        section_names = {
+            "interview": "Interview",
+            "icp": "Ideal Client Persona (ICP)",
+            "pain_1": "Pain Point 1",
+            "pain_2": "Pain Point 2", 
+            "pain_3": "Pain Point 3",
+            "deep_fear": "Deep Fear",
+            "payoff_1": "Payoff 1",
+            "payoff_2": "Payoff 2",
+            "payoff_3": "Payoff 3",
+            "signature_method": "Signature Method",
+            "mistakes": "Mistakes",
+            "prize": "Prize"
+        }
+        
+        completed_sections = []
+        for section_id, section_state in state.get("section_states", {}).items():
+            if section_state.get("status") == "done":
+                section_name = section_names.get(section_id, section_id)
+                completed_sections.append(section_name)
+        
+        current_section_name = section_names.get(state["current_section"].value, state["current_section"].value)
+        
+        progress_info = (
+            f"\n\nSYSTEM STATUS:\n"
+            f"- Total sections: 13\n"
+            f"- Completed: {len(completed_sections)} sections"
+        )
+        if completed_sections:
+            progress_info += f" ({', '.join(completed_sections)})"
+        progress_info += f"\n- Currently working on: {current_section_name}\n"
+        
+        messages.append(SystemMessage(content=progress_info))
         
         # Add clarification for new sections without content
         current_section_id = state["current_section"].value
@@ -660,6 +697,37 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             "status": _status_from_output(agent_out.score, agent_out.router_directive),
         }
         logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 1 COMPLETED: Section {section_id} saved with structured content")
+
+        # ----------------------------------------------------------
+        # NEW: Extract Interview basics and update canvas_data
+        # ----------------------------------------------------------
+        if state.get("current_section") == SectionID.INTERVIEW:
+            try:
+                # Convert rich (Tiptap) JSON to plain text
+                # convert TiptapDocument → dict for extractor
+                plain_text = await extract_plain_text.ainvoke(agent_out.section_update.content.model_dump())
+                import re
+                def _grab(label):
+                    match = re.search(fr"{label}:\s*(.+)", plain_text, re.IGNORECASE)
+                    return match.group(1).strip() if match else None
+
+                name_val = _grab("Name")
+                company_val = _grab("Company")
+                industry_val = _grab("Industry")
+
+                canvas_data = state.get("canvas_data")
+                if canvas_data:
+                    if name_val:
+                        canvas_data.client_name = name_val
+                    if company_val:
+                        canvas_data.company_name = company_val
+                    if industry_val:
+                        canvas_data.industry = industry_val
+                    # Log for debugging
+                    logger.info("CANVAS_DEBUG: Updated canvas_data with Interview info → "
+                                f"name={name_val}, company={company_val}, industry={industry_val}")
+            except Exception as e:
+                logger.warning(f"CANVAS_DEBUG: Failed to extract Interview basics: {e}")
         logger.info(f"DATABASE_DEBUG: ✅ Section {section_id} updated with structured content")
         
         # Extract plain text and update canvas data
