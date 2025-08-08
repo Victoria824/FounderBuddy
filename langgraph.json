@@ -2,7 +2,6 @@
     "python_version": "3.12",
     "dependencies": ["./src"],
     "graphs": {
-        "research_assistant": "./src/agents/research_assistant.py:research_assistant",
         "value_canvas": "agents.value_canvas.agent:graph"
     },
     "env": "./.env"

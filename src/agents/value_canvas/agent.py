@@ -12,6 +12,7 @@ from langgraph.prebuilt import ToolNode
 
 from core.llm import get_model
 from core.settings import settings
+from schema.models import OpenAIModelName
 
 from .models import (
     ChatAgentOutput,
@@ -38,6 +39,9 @@ from .tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Removed complex GPT-5 parameter configuration function for better performance
 
 # Tool setup - Chat Agent has NO tools according to design doc
 
@@ -249,7 +253,8 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     logger.info(f"DEBUG_CHAT_AGENT: Context Packet received: {state.get('context_packet')}")
 
     # Get LLM - no tools for chat agent per design doc
-    llm = get_model(config["configurable"].get("model", settings.DEFAULT_MODEL))
+    # Use default GPT-5 model configuration
+    llm = get_model(OpenAIModelName.GPT_5)
     
     messages: List[BaseMessage] = []
     last_human_msg: Optional[HumanMessage] = None
@@ -727,9 +732,8 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 {{"name": "...", "company": "...", "industry": "..."}}
                 """
                 
-                # Use the same LLM to extract structured data
-                from core import get_model, settings
-                llm = get_model(settings.DEFAULT_MODEL)
+                # Use GPT-5 for data extraction accuracy
+                llm = get_model(OpenAIModelName.GPT_5)
                 extraction_response = await llm.ainvoke(extraction_prompt)
                 
                 import json

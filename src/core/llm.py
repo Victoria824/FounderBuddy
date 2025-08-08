@@ -64,6 +64,9 @@ ModelT: TypeAlias = (
 )
 
 
+# Removed get_gpt5_model function - using standard get_model instead for better performance
+
+
 @cache
 def get_model(model_name: AllModelEnum, /) -> ModelT:
     # NOTE: models with streaming=True will send tokens as they are generated
@@ -73,7 +76,11 @@ def get_model(model_name: AllModelEnum, /) -> ModelT:
         raise ValueError(f"Unsupported model: {model_name}")
 
     if model_name in OpenAIModelName:
-        return ChatOpenAI(model=api_model_name, temperature=0.5, streaming=True)
+        # GPT-5 only supports default temperature=1.0
+        if model_name == OpenAIModelName.GPT_5:
+            return ChatOpenAI(model=api_model_name, streaming=True)
+        else:
+            return ChatOpenAI(model=api_model_name, temperature=0.5, streaming=True)
     if model_name in OpenAICompatibleName:
         if not settings.COMPATIBLE_BASE_URL or not settings.COMPATIBLE_MODEL:
             raise ValueError("OpenAICompatible base url and endpoint must be configured")
