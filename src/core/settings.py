@@ -80,10 +80,14 @@ class Settings(BaseSettings):
 
     OPENWEATHERMAP_API_KEY: SecretStr | None = None
 
-    # Supabase Configuration
+    # Supabase Configuration (Legacy)
     SUPABASE_URL: str | None = None
     SUPABASE_ANON_KEY: SecretStr | None = None
     SUPABASE_SERVICE_ROLE_KEY: SecretStr | None = None
+
+    # DentApp AI Builder API Configuration
+    USE_DENTAPP_API: bool = True
+    DENTAPP_API_URL: str = "https://dentappaibuilder.enspirittech.co.uk"
 
     LANGCHAIN_TRACING_V2: bool = False
     LANGCHAIN_PROJECT: str = "default"

@@ -689,7 +689,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             "user_id": state["user_id"],
             "doc_id": state["doc_id"],
             "section_id": section_id,
-            "content": agent_out.section_update.model_dump(),
+            "content": agent_out.section_update.content.model_dump(), # FINAL FIX: Pass the Tiptap doc directly
             "score": agent_out.score,
             "status": computed_status,
         })
@@ -699,7 +699,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
         logger.debug("DATABASE_DEBUG: Updating local section_states with new content")
         state["section_states"][section_id] = {
             "section_id": section_id,
-            "content": agent_out.section_update.model_dump(),
+            "content": agent_out.section_update.content.model_dump(),  # CORRECTED: Store Tiptap doc directly
             "score": agent_out.score,
             "status": _status_from_output(agent_out.score, agent_out.router_directive),
         }
@@ -780,103 +780,63 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
     elif agent_out:
         logger.info(f"SAVE_SECTION_DEBUG: ✅ ENTERING BRANCH 2: Processing agent output without section_update")
         logger.info("DATABASE_DEBUG: Processing agent output without section_update (likely score/status only)")
-        # BUG FIX: Do not use state["current_section"] as it might have been updated by the router already.
-        # Instead, use the section_id from the context_packet that the chat_agent used to generate the response.
+        
         if state.get("context_packet"):
             score_section_id = state["context_packet"].section_id.value
             logger.debug(f"DATABASE_DEBUG: Processing score/status update for section {score_section_id}")
+
+            # Only proceed if there's a score to save.
+            if agent_out.score is None:
+                logger.info(f"DATABASE_DEBUG: No score or section_update for {score_section_id}, skipping save.")
+                return state
+
+            # We have a score, so we MUST save. We need to find the content.
+            content_to_save = None
+
+            # 1. Try to find content in the current state for the section
+            if score_section_id in state.get("section_states", {}) and state["section_states"][score_section_id].get("content"):
+                logger.info(f"SAVE_SECTION_DEBUG: Found content for section {score_section_id} in state.")
+                # The content in state should now be the correct Tiptap document
+                content_to_save = state["section_states"][score_section_id].get("content")
             
-            # Update existing section state with score and status
-            if score_section_id in state["section_states"]:
-                logger.debug(f"DATABASE_DEBUG: Found existing section state for {score_section_id}, updating score")
-                # Update local state
-                state["section_states"][score_section_id]["score"] = agent_out.score
-                state["section_states"][score_section_id]["status"] = _status_from_output(agent_out.score, agent_out.router_directive)
-                
-                # Save updated state to database only if we have meaningful content or a score
-                if agent_out.score is not None or state["section_states"][score_section_id].get("content"):
-                    logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section to update existing section {score_section_id} with score")
-                    logger.debug("DATABASE_DEBUG: Calling save_section to update existing section with score")
-                    
-                    # [CRITICAL DEBUG] Log parameters for BRANCH 2A update
-                    computed_status_2a = _status_from_output(agent_out.score, agent_out.router_directive)
-                    logger.info(f"SAVE_SECTION_DEBUG: BRANCH 2A calling save_section with:")
-                    logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
-                    logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status_2a} (type: {type(computed_status_2a)})")
-                    
-                    save_result = await save_section.ainvoke({
-                        "user_id": state["user_id"],
-                        "doc_id": state["doc_id"],
-                        "section_id": score_section_id,
-                        "content": state["section_states"][score_section_id].get("content", {"type": "doc", "content": []}),
-                        "score": agent_out.score,
-                        "status": computed_status_2a,
-                    })
-                    logger.debug(f"DATABASE_DEBUG: Score update save_section returned: {bool(save_result)}")
-                logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 2A COMPLETED: Updated existing section {score_section_id} with score")
-                logger.info(f"DATABASE_DEBUG: ✅ Updated existing section {score_section_id} with score {agent_out.score}")
-            else:
-                # If section doesn't exist in local state but we have a score, create minimal entry
-                if agent_out.score is not None:
-                    # Special handling for Interview section - should never reach here with just a score
-                    if score_section_id == SectionID.INTERVIEW.value:
-                        logger.error(f"ERROR! Interview section received score {agent_out.score} without proper section_update containing the summary!")
-                        logger.error("Interview section MUST include a complete summary before asking for rating.")
-                        # Don't save minimal content for Interview section
-                        logger.info(f"SAVE_SECTION_DEBUG: ❌ BRANCH 2B SKIPPED: Interview section must have proper content, not just score")
-                    else:
-                        # For other sections, minimal score-only save might be acceptable
-                        logger.debug(f"DATABASE_DEBUG: Section {score_section_id} not in local state, creating minimal entry with score")
-                        # Create minimal content indicating section was scored
-                        minimal_content = {
-                            "type": "doc",
-                            "content": [
-                                {
-                                    "type": "paragraph",
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": f"Section scored: {agent_out.score}/5"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                        
-                        # Save to database
-                        logger.info(f"SAVE_SECTION_DEBUG: ✅ CALLING save_section to create new minimal section {score_section_id}")
-                        logger.debug("DATABASE_DEBUG: Calling save_section to create new minimal section entry")
-                        
-                        # [CRITICAL DEBUG] Log parameters for BRANCH 2B new section
-                        computed_status_2b = _status_from_output(agent_out.score, agent_out.router_directive)
-                        logger.info(f"SAVE_SECTION_DEBUG: BRANCH 2B calling save_section with:")
-                        logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
-                        logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status_2b} (type: {type(computed_status_2b)})")
-                        
-                        save_result = await save_section.ainvoke({
-                            "user_id": state["user_id"],
-                            "doc_id": state["doc_id"],
-                            "section_id": score_section_id,
-                            "content": minimal_content,
-                            "score": agent_out.score,
-                            "status": computed_status_2b,
-                        })
-                        logger.debug(f"DATABASE_DEBUG: Minimal entry save_section returned: {bool(save_result)}")
-                        
-                        # Update local state
-                        state["section_states"][score_section_id] = {
-                            "section_id": score_section_id,
-                            "content": minimal_content,
-                            "score": agent_out.score,
-                            "status": _status_from_output(agent_out.score, agent_out.router_directive),
-                        }
-                        logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 2B COMPLETED: Created new minimal section {score_section_id}")
-                        logger.info(f"DATABASE_DEBUG: ✅ Created new minimal section {score_section_id} with score {agent_out.score}")
+            # 2. If not in state, recover from previous message history
+            if not content_to_save:
+                logger.warning(f"SAVE_SECTION_DEBUG: Content for {score_section_id} not in state, recovering from history.")
+                messages = state.get("messages", [])
+                if len(messages) >= 2 and isinstance(messages[-1], HumanMessage) and isinstance(messages[-2], AIMessage):
+                    summary_text = messages[-2].content
+                    logger.info("SAVE_SECTION_DEBUG: Recovered summary text, converting to Tiptap format.")
+                    content_to_save = await create_tiptap_content.ainvoke({"text": summary_text})
                 else:
-                    logger.info(f"SAVE_SECTION_DEBUG: ❌ BRANCH 2C SKIPPED: No score and section {score_section_id} doesn't exist locally")
-                    logger.debug(f"DATABASE_DEBUG: No score provided and section {score_section_id} doesn't exist locally, skipping")
+                    logger.error(f"SAVE_SECTION_DEBUG: Could not recover summary from message history for {score_section_id}.")
+
+            # 3. If we found content (either from state or recovery), proceed with saving.
+            if content_to_save:
+                computed_status = _status_from_output(agent_out.score, agent_out.router_directive)
+                logger.info(f"SAVE_SECTION_DEBUG: ✅ Calling save_section for {score_section_id} with score and content.")
+                
+                await save_section.ainvoke({
+                    "user_id": state["user_id"],
+                    "doc_id": state["doc_id"],
+                    "section_id": score_section_id,
+                    "content": content_to_save,
+                    "score": agent_out.score,
+                    "status": computed_status,
+                })
+
+                # Update local state consistently, whether it existed before or not.
+                state.setdefault("section_states", {})[score_section_id] = {
+                    "section_id": score_section_id,
+                    "content": content_to_save,
+                    "score": agent_out.score,
+                    "status": computed_status,
+                }
+                logger.info(f"DATABASE_DEBUG: ✅ Updated/created section state for {score_section_id} with score {agent_out.score}")
+            else:
+                # 4. If content recovery failed, we must not call save_section with empty content.
+                logger.error(f"DATABASE_DEBUG: ❌ CRITICAL: Aborting save for section {score_section_id} due to missing content.")
+
         else:
-            logger.info(f"SAVE_SECTION_DEBUG: ❌ BRANCH 2 FAILED: Cannot update section state as context_packet is missing")
             logger.warning("DATABASE_DEBUG: ⚠️ Cannot update section state as context_packet is missing")
 
     # [SAVE_SECTION_DEBUG] Final decision summary

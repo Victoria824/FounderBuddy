@@ -613,11 +613,12 @@ PROCESS:
 - Then Pain Point 2: Collect all four elements one at a time
 - Finally Pain Point 3: Collect all four elements one at a time
 - After ALL three pain points are complete, show the full summary and ask for a satisfaction rating
-
-Current progress in this section:
-- Pain Point 1: {pain1_symptom if pain1_symptom else "Not yet collected"}
-- Pain Point 2: {pain2_symptom if pain2_symptom else "Not yet collected"}
-- Pain Point 3: {pain3_symptom if pain3_symptom else "Not yet collected"}
+- EXCEPTION: If the user provides all information for all three pain points at once, you MUST immediately generate the full summary, include it in `section_update`, and ask for a satisfaction rating. Do not ask for confirmation first.
+ 
+ Current progress in this section:
+ - Pain Point 1: {pain1_symptom if pain1_symptom else "Not yet collected"}
+ - Pain Point 2: {pain2_symptom if pain2_symptom else "Not yet collected"}
+ - Pain Point 3: {pain3_symptom if pain3_symptom else "Not yet collected"}
 
 Example of properly formatted section_update with all three pain points:
 ```json
