@@ -75,16 +75,39 @@ async def initialize_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     """
     logger.info("Initialize node - Setting up default values")
 
-    # This node no longer creates user_id or doc_id.
-    # That responsibility is now in service.py, which should call
-    # initialize_value_canvas_state for new conversations.
+    # CRITICAL FIX: Get correct IDs from config instead of using temp IDs
+    # service.py now passes the correct user_id and doc_id through config
+    configurable = config.get("configurable", {})
+    
     if "user_id" not in state or not state["user_id"]:
-        logger.warning("Initialize node running without a user_id.")
-        # Provide a temporary ID to prevent downstream errors, but this is a sign of a problem.
-        state["user_id"] = "temp-user-id"
+        # Try to get user_id from config first
+        if "user_id" in configurable and configurable["user_id"]:
+            state["user_id"] = configurable["user_id"]
+            logger.info(f"Initialize node - Got user_id from config: {state['user_id']}")
+        else:
+            logger.error("CRITICAL: Initialize node running without a user_id in both state and config!")
+            raise ValueError(
+                "Critical system error: No valid user_id found. "
+                "This indicates a serious ID chain break that will cause data loss. "
+                "Check service.py ID passing logic."
+            )
+    
     if "doc_id" not in state or not state["doc_id"]:
-        logger.warning("Initialize node running without a doc_id.")
-        state["doc_id"] = "temp-doc-id"
+        # Try to get doc_id from config, or derive from thread_id (since they're now the same)
+        if "doc_id" in configurable and configurable["doc_id"]:
+            state["doc_id"] = configurable["doc_id"]
+            logger.info(f"Initialize node - Got doc_id from config: {state['doc_id']}")
+        elif "thread_id" in configurable and configurable["thread_id"]:
+            # Since we fixed service.py to use doc_id as thread_id, they should be the same
+            state["doc_id"] = configurable["thread_id"]
+            logger.info(f"Initialize node - Using thread_id as doc_id: {state['doc_id']}")
+        else:
+            logger.error("CRITICAL: Initialize node running without a doc_id in state, config, or thread_id!")
+            raise ValueError(
+                "Critical system error: No valid doc_id found. "
+                "This indicates a serious ID chain break that will cause data loss. "
+                "Check service.py ID passing logic."
+            )
 
     # Ensure all other required fields have default values
     if "current_section" not in state:

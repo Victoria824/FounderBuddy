@@ -12,9 +12,13 @@ This document provides comprehensive technical guidance for integrating with the
     *   [Future Enhancement: Structured UI Interactions](#future-enhancement-structured-ui-interactions)
 2.  **Agent's Internal Logic: Database Interaction**
     *   [Collaboration with the Backend Team](#collaboration-with-the-backend-team)
-    *   [API Endpoints for Database Interaction](#api-endpoints-for-database-interaction)
+    *   [Database Operations for Data Interaction](#api-endpoints-for-database-interaction)
         *   [Key Identifiers (`user_id`, `doc_id`)](#key-identifiers-user_id-doc_id)
-3.  **Appendix**
+3.  **AI-Driven Dynamic Testing Framework**
+    *   [Core Capabilities of the 'AI Examiner'](#core-capabilities-of-the-ai-examiner)
+    *   [Traceable Test Reports](#traceable-test-reports)
+    *   [Framework Value: Beyond the Ideal Scenario](#framework-value-beyond-the-ideal-scenario)
+4.  **Appendix**
     *   [Understanding the Core Concepts: The Thread and `thread_id`](#appendix-understanding-the-core-concepts-the-thread-and-thread_id)
 
 ---
@@ -47,11 +51,11 @@ This is the fundamental lifecycle for handling  `user_id` and `thread_id` betwee
 
 #### <a id="api-endpoints"></a>API Endpoints
 
-**1. Getting a Single Response (`/invoke`)**
+**1. Getting a Single Response (`/value-canvas/invoke`)**
 
 This endpoint handles both sending messages to an existing conversation and starting a new one. To start a new thread, send the first message with a `user_id` but **omit the `thread_id`**. The agent service will create a new thread and return its unique `thread_id` in the response. For all subsequent messages in that thread, include the `thread_id` you received.
 
--   **Endpoint**: `POST /api/v1/value_canvas/invoke`
+-   **Endpoint**: `POST /value-canvas/invoke` or `POST /value_canvas/invoke`
 -   **Request Body (`UserInput`)**:
     ```json
     {
@@ -73,15 +77,15 @@ This endpoint handles both sending messages to an existing conversation and star
     }
     ```
 
-**2. Streaming a Response (`/stream`)**
+**2. Streaming a Response (`/value-canvas/stream`)**
 
--   **Endpoint**: `POST /api/v1/value_canvas/stream`
--   **Request Body (`StreamInput`)**: Same as `/invoke`.
+-   **Endpoint**: `POST /value-canvas/stream` or `POST /value_canvas/stream`
+-   **Request Body (`StreamInput`)**: Same as `/value-canvas/invoke`.
 -   **Success Response (200 OK)**: A stream of `text/event-stream` data.
 
 **3. Retrieving a Specific Thread's History (`/history`)**
 
--   **Endpoint**: `POST /api/v1/history`
+-   **Endpoint**: `POST /history`
 -   **Request Body (`ChatHistoryInput`)**:
     ```json
     {
@@ -104,13 +108,13 @@ To ensure seamless collaboration between the user and the agent, the system empl
 
 The collaboration workflow is as follows:
 
-1.  **Agent Generates Content**: When the agent generates a draft or makes updates, it does **not** send this content directly back to the front-end via an API response. Instead, its sole action is to save the new data directly into the database using the backend APIs documented below (e.g., `POST /api/v1/value-canvas/save-section`).
+1.  **Agent Generates Content**: When the agent generates a draft or makes updates, it does **not** send this content directly back to the front-end via an API response. Instead, its sole action is to save the new data directly into the database using the backend APIs documented below (e.g., the save-section functionality).
 
 2.  **Front-end Listens for Changes**: The front-end's responsibility is to actively monitor the database for any changes to the content. This can be achieved using real-time subscription services (e.g., Supabase Realtime, Laravel Broadcasting) or by polling relevant endpoints. When a change is detected, the front-end fetches the latest content and re-renders the rich-text editor to display it.
 
 3.  **User Edits and Saves**: When the user edits the draft in the rich-text editor, their changes are saved back to the **same location in the database** via the application's backend. This ensures the database always holds the most current version of the content.
 
-4.  **Agent Stays Synchronized**: Before performing its next action, the agent will read the latest state from the database using the backend APIs (e.g., `POST /api/v1/value-canvas/get-context`). This allows it to work with the user's most recent edits, ensuring both parties are always synchronized.
+4.  **Agent Stays Synchronized**: Before performing its next action, the agent will read the latest state from the database using the backend APIs (e.g., the get-context functionality). This allows it to work with the user's most recent edits, ensuring both parties are always synchronized.
 
 This database-centric approach guarantees data consistency and allows the front-end and the agent to operate independently, communicating asynchronously through the shared database state.
 
@@ -144,14 +148,14 @@ This approach will allow for a richer, more guided user experience. However, for
 
 ### <a id="collaboration-with-the-backend-team"></a>Collaboration with the Backend Team
 
-To support the agent's functionality, a close collaboration with the backend team is essential. The agent relies on a set of stable HTTP API endpoints to read and write user data, which fully decouples the agent from the underlying database technology and schema.
+To support the agent's functionality, the agent directly integrates with Supabase as the backend database. The agent uses internal database tools and functions to read and write user data, which allows direct database access while maintaining proper data structure and validation.
 
 The collaboration involves the following areas:
-1.  **Database Credentials for Conversation State**: To enable conversation persistence, the agent's environment requires database connection variables (e.g., URL, keys). The underlying `LangGraph` framework will automatically create and manage its own tables for thread history, so the provided credentials should have permissions for these operations.
-2.  **Implementing Data-Access API Endpoints**: To allow the agent to function, the backend provides API endpoints for it to get context and save data. These endpoints, as defined below, ensure the agent can interact with the necessary document information while remaining decoupled from the database itself.
+1.  **Database Credentials for Conversation State**: To enable conversation persistence, the agent's environment requires Supabase connection variables (URL, API keys). The underlying `LangGraph` framework will automatically create and manage its own tables for thread history, so the provided credentials should have permissions for these operations.
+2.  **Supabase Database Schema**: The agent requires specific database tables and functions to store and retrieve Value Canvas data. The database operations are handled internally by the agent through Supabase client libraries.
 
 
-### <a id="api-endpoints-for-database-interaction"></a>API Endpoints for Database Interaction
+### <a id="api-endpoints-for-database-interaction"></a>Database Operations for Data Interaction
 
 #### <a id="key-identifiers-user_id-doc_id"></a>Key Identifiers (`user_id`, `doc_id`)
 
@@ -166,8 +170,8 @@ To ensure data is correctly scoped, all API calls use two primary identifiers:
 
 **1. Get Context for a Section**
 
--   **Description**: Retrieves all necessary data for the agent to work on a specific section of a document. The backend uses the `doc_id` to fetch the correct set of prompts, rules, and existing draft content.
--   **Endpoint**: `POST /api/v1/value-canvas/get-context`
+-   **Description**: Retrieves all necessary data for the agent to work on a specific section of a document. The agent uses the Supabase database to fetch the correct set of prompts, rules, and existing draft content.
+-   **Database Operation**: Supabase RPC call or table query via the agent's internal database tools
 
 -   **Request Body Fields**:
     -   `user_id` (string, required): The user's unique identifier.
@@ -185,7 +189,7 @@ To ensure data is correctly scoped, all API calls use two primary identifiers:
 **2. Save Section Content**
 
 -   **Description**: Saves the results of a specific section of a document.
--   **Endpoint**: `POST /api/v1/value-canvas/save-section`
+-   **Database Operation**: Supabase table insert/update via the agent's internal database tools
 
 -   **Request Body Fields**:
     -   `user_id`, `doc_id`, `section_id`: Identifiers for user, document, and section.
@@ -199,7 +203,7 @@ To ensure data is correctly scoped, all API calls use two primary identifiers:
 **3. Get All Sections Status**
 
 -   **Description**: Retrieves a progress overview for a specific document.
--   **Endpoint**: `POST /api/v1/value-canvas/get-all-sections-status`
+-   **Database Operation**: Supabase table query via the agent's internal database tools
 
 -   **Request Body Fields**:
     -   `user_id`, `doc_id`: Identifiers for the user and document.
@@ -210,7 +214,7 @@ To ensure data is correctly scoped, all API calls use two primary identifiers:
 **4. Export Value Canvas Data**
 
 -   **Description**: Triggers the final export process for a completed document.
--   **Endpoint**: `POST /api/v1/value-canvas/export`
+-   **Database Operation**: Supabase table query and data aggregation via the agent's internal database tools
 
 -   **Request Body Fields**:
     -   `user_id`, `doc_id`: Identifiers for the user and document.
@@ -220,7 +224,36 @@ To ensure data is correctly scoped, all API calls use two primary identifiers:
 
 
 ---
+## <a id="ai-driven-dynamic-testing-framework"></a>AI-Driven Dynamic Testing Framework
 
+To address the complexity and variability of real-world conversations, we employ a dynamic testing model based on an **'AI Examiner'** to complement the limitations of traditional, script-based testing in simulating authentic user interactions.
+
+**Core Concept: Using one AI (the Examiner) to intelligently test our asset agents (e.g., the Value Canvas Agent).**
+
+### <a id="core-capabilities-of-the-ai-examiner"></a>Core Capabilities of the 'AI Examiner'
+
+Our specialized **AI Examiner** possesses the following key capabilities:
+
+1.  **Rules Proficiency**: The Examiner is well-versed in the business agent's design documents and predefined instructions, serving as the gold standard for judging its compliance. For instance, it loads and comprehends the entire `value_canvas_agent_docs.md` file to master every ideal step of the process, from the initial interview to the final Value Canvas generation.
+2.  **Realistic Simulation**: The Examiner is assigned a complete and consistent user persona, enabling it to engage in natural, logical conversations as a real client would.
+3.  **Customized Edge Case Testing**: A key advantage of our framework is the ability to configure the AI Examiner to proactively simulate challenging scenarios. This tests the business agent's robustness against various edge cases.
+4.  **Real-Time Evaluation**: In every turn of the conversation, the Examiner assesses the business agent's performance against the predefined workflow in real-time and logs any deviations.
+   
+### <a id="traceable-test-reports"></a>Traceable Test Reports
+
+We believe in the value of transparency. Every dynamic test automatically generates a detailed, timestamped report in Markdown format. This report documents the **complete conversation** between the AI Examiner and the business agent, and includes a **flow compliance analysis** for each turn. Clients can review these reports at any time for a clear understanding of the agent's performance in various scenarios, ensuring the entire testing process is fully transparent and traceable.
+
+You can view a sample test report here: [Sample Test Report Demo](https://hackmd.io/@QycwKnwqQoWdQHCbGzCSdg/rk4nHNr_xg).
+
+
+### <a id="framework-value-beyond-the-ideal-scenario"></a>Framework Value: Beyond the Ideal Scenario
+
+By simulating these complex, non-ideal scenarios, we can thoroughly inspect the business agent's **robustness** and **fault tolerance**. This ensures our AI not only excels in the 'happy path' but can also gracefully handle real-world unpredictability, delivering a truly reliable and intelligent service.
+
+Furthermore, this process creates an invaluable feedback loop for prompt engineering. By analyzing the detailed logs where the agent deviates or fails, we can make precise, data-driven adjustments to its underlying prompts. This allows us to systematically refine the agent's performance, ensuring continuous improvement and alignment with business goals.
+
+
+---
 ## Appendix
 
 ### <a id="appendix-understanding-the-core-concepts-the-thread-and-thread_id"></a>Understanding the Core Concepts: The Thread and `thread_id`

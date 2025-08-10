@@ -121,13 +121,13 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
         # This is a new conversation, so we need to initialize a new state
         initial_state = await initialize_value_canvas_state(user_id=user_id)
         
-        # Determine the initial user_id and doc_id from the newly created state
+        # CRITICAL FIX: Use the doc_id from initial_state as the thread_id
+        # This ensures proper ID chain: thread_id == doc_id for data isolation
         user_id = initial_state.get("user_id")
         doc_id = initial_state.get("doc_id")
-        import uuid as _uuid
-        thread_id = str(_uuid.uuid4())
+        thread_id = doc_id  # Use doc_id as thread_id for consistent data isolation
         
-        logger.info(f"Initialized new thread with ID: {thread_id}")
+        logger.info(f"Initialized new thread with ID: {thread_id} (using doc_id for consistency)")
     else:
         # This is an existing conversation, so we load the state
         logger.info(f"Loading existing thread with ID: {thread_id}")
@@ -139,9 +139,14 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
         "user_id": user_id,
     }
     
-    # Add doc_id if it exists (from new conversation initialization)
+    # CRITICAL FIX: Always pass doc_id to agent
+    # For new conversations, doc_id comes from initial_state
+    # For existing conversations, doc_id should equal thread_id (due to our fix)
     if not user_input.thread_id and 'doc_id' in locals():
         configurable["doc_id"] = doc_id
+    else:
+        # For existing conversations, thread_id IS the doc_id
+        configurable["doc_id"] = thread_id
     
     # Add user's custom agent config if provided
     if user_input.agent_config:
