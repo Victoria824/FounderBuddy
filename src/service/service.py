@@ -20,7 +20,9 @@ from langsmith import Client as LangsmithClient
 
 from agents import DEFAULT_AGENT, AgentGraph, get_agent, get_all_agent_info
 from agents.value_canvas.agent import initialize_value_canvas_state
+from agents.value_canvas.prompts import SECTION_TEMPLATES
 from core import settings
+from core.dentapp_utils import SECTION_ID_MAPPING
 from memory import initialize_database, initialize_store
 from schema import (
     ChatHistory,
@@ -219,6 +221,22 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> Invoke
             raise ValueError(f"Unexpected response type: {response_type}")
 
         output.run_id = str(run_id)
+
+        # Get the latest state to include section data
+        state = await agent.aget_state(config=kwargs["config"])
+        if "current_section" in state.values:
+            current_section_enum = state.values["current_section"]
+            current_section_id = current_section_enum.value  # Use the string value
+            section_state = state.values.get("section_states", {}).get(current_section_id)
+            section_template = SECTION_TEMPLATES.get(current_section_id)
+
+            section_data = {
+                "database_id": SECTION_ID_MAPPING.get(current_section_id),
+                "name": section_template.name if section_template else "Unknown Section",
+                "status": section_state.get("status", "pending") if section_state else "pending",
+            }
+            output.custom_data["section"] = section_data
+
         return InvokeResponse(
             output=output,
             thread_id=kwargs["config"]["configurable"]["thread_id"],
@@ -336,6 +354,24 @@ async def message_generator(
         logger.error(f"Error in message generator: {e}")
         yield f"data: {json.dumps({'type': 'error', 'content': 'Internal server error'})}\n\n"
     finally:
+        # Always send section data at the end of the stream
+        try:
+            state = await agent.aget_state(config=kwargs["config"])
+            if "current_section" in state.values:
+                current_section_enum = state.values["current_section"]
+                current_section_id = current_section_enum.value  # Use the string value
+                section_state = state.values.get("section_states", {}).get(current_section_id)
+                section_template = SECTION_TEMPLATES.get(current_section_id)
+
+                section_data = {
+                    "database_id": SECTION_ID_MAPPING.get(current_section_id),
+                    "name": section_template.name if section_template else "Unknown Section",
+                    "status": section_state.get("status", "pending") if section_state else "pending",
+                }
+                yield f"data: {json.dumps({'type': 'section', 'content': section_data})}\n\n"
+        except Exception as e:
+            logger.error(f"Error getting section data: {e}")
+
         yield "data: [DONE]\n\n"
 
 
