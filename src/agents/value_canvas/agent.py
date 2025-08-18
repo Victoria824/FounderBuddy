@@ -547,6 +547,8 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
                         if "satisfied" in agent_output.reply.lower() and "summary" in agent_output.reply.lower():
                             if "Here's what I know about you" not in agent_output.reply:
                                 logger.error("ERROR! Asking for satisfaction rating without showing summary first!")
+
+            # keep original behavior: do not inject the summary into reply here
         
         # DEBUG: Check state consistency
         logger.info(f"AGENT_OUTPUT_DEBUG: Current section_states: {list(state.get('section_states', {}).keys())}")
