@@ -1,4 +1,4 @@
-from schema.models import AllModelEnum
+from schema.llm_models import AllModelEnum
 from schema.schema import (
     AgentInfo,
     ChatHistory,

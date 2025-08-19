@@ -7,8 +7,8 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from core.dentapp_client import get_dentapp_client
-from core.dentapp_utils import (
+from integrations.dentapp.dentapp_client import get_dentapp_client
+from integrations.dentapp.dentapp_utils import (
     AGENT_ID,
     SECTION_ID_MAPPING,
     get_section_id_int,

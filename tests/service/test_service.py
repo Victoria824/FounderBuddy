@@ -9,7 +9,7 @@ from langgraph.types import Interrupt
 
 from agents.agents import Agent
 from schema import ChatHistory, ChatMessage, ServiceMetadata
-from schema.models import OpenAIModelName
+from schema.llm_models import OpenAIModelName
 
 
 def test_invoke(test_client, mock_agent) -> None:

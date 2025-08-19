@@ -9,7 +9,7 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 from core.llm import get_model
-from schema.models import (
+from schema.llm_models import (
     AnthropicModelName,
     FakeModelName,
     GroqModelName,

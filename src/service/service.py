@@ -24,7 +24,7 @@ from agents import DEFAULT_AGENT, AgentGraph, get_agent, get_all_agent_info
 from agents.value_canvas.agent import initialize_value_canvas_state
 from agents.value_canvas.prompts import SECTION_TEMPLATES
 from core import settings
-from core.dentapp_utils import SECTION_ID_MAPPING
+from integrations.dentapp.dentapp_utils import SECTION_ID_MAPPING
 from memory import initialize_database, initialize_store
 from schema import (
     ChatHistory,
