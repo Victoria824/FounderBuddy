@@ -25,9 +25,6 @@ from .models import (
 )
 from .prompts import SECTION_PROMPTS, SECTION_TEMPLATES
 
-# MVP: Fixed user_id for all users in DentApp API
-MVP_USER_ID = 1
-
 logger = logging.getLogger(__name__)
 
 
@@ -103,16 +100,16 @@ async def get_context(
             
             logger.info(f"TOOLS_API_CALL: Mapped section_id '{section_id}' -> {section_id_int}")
             log_api_operation("get_context", user_id=user_id, section_id=section_id, 
-                            user_id_int=MVP_USER_ID, section_id_int=section_id_int)
+                            user_id_int=user_id, section_id_int=section_id_int)
             
-            # Call DentApp API (MVP: always use user_id=1)
-            logger.info(f"TOOLS_API_CALL: Calling get_section_state(agent_id={AGENT_ID}, section_id={section_id_int}, user_id={MVP_USER_ID})")
+            # Call DentApp API
+            logger.info(f"TOOLS_API_CALL: Calling get_section_state(agent_id={AGENT_ID}, section_id={section_id_int}, user_id={user_id})")
             dentapp_client = get_dentapp_client()
             async with dentapp_client as client:
                 result = await client.get_section_state(
                     agent_id=AGENT_ID,
                     section_id=section_id_int,
-                    user_id=MVP_USER_ID
+                    user_id=user_id
                 )
             logger.info(f"TOOLS_API_CALL: get_section_state returned: {result is not None}")
             
@@ -215,17 +212,17 @@ async def save_section(
             logger.info(f"TOOLS_API_CALL: Converted content length: {len(plain_text)} chars")
             
             log_api_operation("save_section", user_id=user_id, section_id=section_id, 
-                            user_id_int=MVP_USER_ID, section_id_int=section_id_int,
+                            user_id_int=user_id, section_id_int=section_id_int,
                             content_length=len(plain_text), score=score, status=status)
             
-            # Call DentApp API (MVP: always use user_id=1)
-            logger.info(f"TOOLS_API_CALL: Calling save_section_state(agent_id={AGENT_ID}, section_id={section_id_int}, user_id={MVP_USER_ID})")
+            # Call DentApp API
+            logger.info(f"TOOLS_API_CALL: Calling save_section_state(agent_id={AGENT_ID}, section_id={section_id_int}, user_id={user_id})")
             dentapp_client = get_dentapp_client()
             async with dentapp_client as client:
                 result = await client.save_section_state(
                     agent_id=AGENT_ID,
                     section_id=section_id_int,
-                    user_id=MVP_USER_ID,
+                    user_id=user_id,
                     content=plain_text,
                     metadata={}  # Empty metadata for MVP
                 )
@@ -347,16 +344,15 @@ async def get_all_sections_status(
         if settings.USE_DENTAPP_API:
             logger.debug("DATABASE_DEBUG: ✅ DentApp API enabled, attempting to fetch all sections status")
             try:
-                # MVP: always use user_id=1
                 log_api_operation("get_all_sections_status", user_id=user_id, doc_id=doc_id, 
-                                user_id_int=MVP_USER_ID)
+                                user_id_int=user_id)
                 
-                # Call DentApp API (MVP: always use user_id=1)
+                # Call DentApp API
                 dentapp_client = get_dentapp_client()
                 async with dentapp_client as client:
                     api_result = await client.get_all_sections_status(
                         agent_id=AGENT_ID,
-                        user_id=MVP_USER_ID
+                        user_id=user_id
                     )
                 
                 if api_result:
@@ -495,15 +491,14 @@ async def export_checklist(
         if settings.USE_DENTAPP_API:
             logger.debug("DATABASE_DEBUG: ✅ DentApp API enabled, attempting export via API")
             try:
-                # MVP: always use user_id=1
                 log_api_operation("export_checklist", user_id=user_id, doc_id=doc_id, 
-                                user_id_int=MVP_USER_ID)
+                                user_id_int=user_id)
                 
-                # Call DentApp API export (MVP: always use user_id=1)
+                # Call DentApp API export
                 dentapp_client = get_dentapp_client()
                 async with dentapp_client as client:
                     export_result = await client.export_agent_data(
-                        user_id=MVP_USER_ID,
+                        user_id=user_id,
                         agent_id=AGENT_ID
                     )
                 
@@ -514,7 +509,7 @@ async def export_checklist(
                     return {
                         "success": True,
                         "format": "json",  # DentApp API provides structured data
-                        "url": f"/api/dentapp/exports/{MVP_USER_ID}/{AGENT_ID}",  # Mock URL
+                        "url": f"/api/dentapp/exports/{user_id}/{AGENT_ID}",  # Mock URL
                         "content": export_result.get('canvas_data', {}),
                         "generated_at": export_result.get('exported_at', current_time),
                         "total_sections": export_result.get('total_sections', 0),
