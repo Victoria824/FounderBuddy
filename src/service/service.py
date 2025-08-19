@@ -236,7 +236,7 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
     # Build the configurable dict
     configurable = {
         "thread_id": thread_id,
-        "model": user_input.model,
+        "model": "gpt-4o",  # FORCE gpt-4o for stability
         "user_id": user_id,
     }
     

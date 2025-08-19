@@ -285,7 +285,7 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
 
     # Get LLM - no tools for chat agent per design doc
     # Use GPT-4O model configuration
-    llm = get_model(OpenAIModelName.GPT_4O)
+    llm = get_model(config["configurable"]["model"])
     
     messages: list[BaseMessage] = []
     last_human_msg: HumanMessage | None = None
@@ -757,7 +757,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 """
                 
                 # 3. Get the LLM and bind it to our desired structured output model
-                llm = get_model(OpenAIModelName.GPT_4O)
+                llm = get_model(config["configurable"]["model"])
                 structured_llm = llm.with_structured_output(extraction_model)
                 
                 # 4. Invoke the LLM to get a structured Pydantic object directly
