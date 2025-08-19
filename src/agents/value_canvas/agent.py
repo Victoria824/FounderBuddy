@@ -1,7 +1,7 @@
 """Value Canvas Agent implementation using LangGraph StateGraph."""
 
 import logging
-from typing import Literal, Any
+from typing import Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -10,7 +10,6 @@ from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 
 from core.llm import get_model
-from schema.models import OpenAIModelName
 
 from .models import (
     ChatAgentOutput,
@@ -680,7 +679,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 if hasattr(first_para, 'content') and first_para.content:
                     first_text = first_para.content[0].get('text', 'No text')
                     logger.warning(f"CONTENT_DEBUG: First paragraph starts with: {first_text[:100]}...")
-            except:
+            except Exception:
                 logger.warning("CONTENT_DEBUG: Could not extract content preview")
         
         # Save to database using save_section tool
