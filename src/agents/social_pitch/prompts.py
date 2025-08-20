@@ -624,15 +624,12 @@ For each Pain Point, we'll capture four essential elements:
 3. **Cost** (Immediate impact): What it's costing them right now
 4. **Consequence** (Future impact): What happens if they don't solve this
 
-CRITICAL SUMMARY RULE:
-- **Synthesize and Enrich:** Do not just list the user's inputs. Your role is to act as an expert consultant.
-- **Build on their ideas:** Take the user's raw input for Symptoms, Struggles, Costs, and Consequences, and refine the language to be more powerful and evocative.
-- **Add Insights:** Based on your expertise, add relevant insights. For example, you could highlight how `pain1_symptom` and `pain3_symptom` are likely connected and stem from a deeper root cause.
-- **Identify Patterns:** Look for patterns across the three pain points. Are they all related to a lack of systems? A fear of delegating? A weak market position? Point this out to the user.
-- **Create "Aha" Moments:** The goal of the summary is to give the user an "aha" moment where they see their own problems in a new, clearer light. Your summary should feel like a revelation, not a repetition.
-- **Structure:** Present the summary in a clear, compelling way. You can still list the three pain points, but frame them within a larger narrative about the client's core challenge.
-- **Example enrichment:** If a user says the symptom is "slow sales," you could reframe it as "Stagnant Growth Engine." If they say the cost is "wasted time," you could articulate it as "Burning valuable runway on low-impact activities."
-- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+PROCESS:
+- Start with Pain Point 1: Collect all four elements one at a time
+- Then Pain Point 2: Collect all four elements one at a time
+- Finally Pain Point 3: Collect all four elements one at a time
+- After ALL three pain points are complete, show the full summary and ask for a satisfaction rating
+- EXCEPTION: If the user provides all information for all three pain points at once, you MUST immediately generate the full summary, include it in `section_update`, and ask for a satisfaction rating. Do not ask for confirmation first.
  
  Current progress in this section:
  - Pain Point 1: {pain1_symptom if pain1_symptom else "Not yet collected"}
@@ -647,60 +644,67 @@ Example of properly formatted section_update with all three pain points:
       "type": "doc",
       "content": [
         {
+          "type": "heading",
+          "attrs": {"level": 3},
+          "content": [{"type": "text", "text": "Pain Point 1"}]
+        },
+        {
           "type": "paragraph",
-          "content": [
-            {"type": "text", "text": "Based on what you've shared, a clear narrative emerges. The core challenge isn't just one of these issues, but how they interlock to create a cycle of stagnation. Here’s the synthesized view:"}
-          ]
+          "content": [{"type": "text", "text": "Symptom: Revenue Roller-Coaster"}]
+        },
+        {
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Struggle: Constant anxiety about unpredictable cash flow."}]
+        },
+        {
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Cost: Wastes time that should be spent on growth."}]
+        },
+        {
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Consequence: Eventually leads to burnout or business failure."}]
         },
         {
           "type": "heading",
           "attrs": {"level": 3},
-          "content": [{"type": "text", "text": "1. The Operational Drag: Inefficient Processes"}]
+          "content": [{"type": "text", "text": "Pain Point 2"}]
         },
         {
           "type": "paragraph",
-          "content": [
-            {"type": "text", "text": "The most immediate issue is an internal one. You're facing what I'd call 'Operational Drag,' where ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "frequent bottlenecks and duplicated work", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": " are leading directly to ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "higher operational expenses and lost productivity.", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": " If this continues, the constant firefighting doesn't just erode profit margins—it ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "drives top talent to burn out", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": ", crippling your ability to scale.", "marks": [{"type": "bold"}]}
-          ]
+          "content": [{"type": "text", "text": "Symptom: Talent Turnover"}]
+        },
+        {
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Struggle: Best people leave for better opportunities."}]
+        },
+        {
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Cost: Constantly training new staff instead of scaling."}]
+        },
+        {
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Consequence: Company culture deteriorates and growth stalls."}]
         },
         {
           "type": "heading",
           "attrs": {"level": 3},
-          "content": [{"type": "text", "text": "2. The Growth Ceiling: A Crisis of Clarity"}]
+          "content": [{"type": "text", "text": "Pain Point 3"}]
         },
         {
           "type": "paragraph",
-          "content": [
-            {"type": "text", "text": "This internal inefficiency fuels a larger strategic problem: a 'Growth Ceiling.' Because there's a ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "fundamental lack of clarity", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": ", your team is caught in a loop of ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "second-guessing and misaligned priorities.", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": " The immediate cost is ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "wasted time and stalled momentum", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": ", but the long-term consequence is more severe: a perpetual cycle of ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "lost revenue and declining morale.", "marks": [{"type": "bold"}, {"type": "italic"}]}
-          ]
+          "content": [{"type": "text", "text": "Symptom: Market Invisibility"}]
         },
         {
-            "type": "heading",
-            "attrs": {"level": 3},
-            "content": [{"type": "text", "text": "3. The Market Disconnect: Customer Indifference"}]
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Struggle: Great work goes unnoticed in a crowded market."}]
         },
         {
-            "type": "paragraph",
-            "content": [
-                {"type": "text", "text": "Ultimately, these internal issues manifest externally as a 'Market Disconnect.' When clarity and process fail, the customer experience suffers, leading to ", "marks": [{"type": "bold"}]},
-                {"type": "text", "text": "poor retention.", "marks": [{"type": "bold"}, {"type": "italic"}]},
-                {"type": "text", "text": " You're then forced into a costly cycle of constantly acquiring new customers to replace the ones you lose. Over time, this ", "marks": [{"type": "bold"}]},
-                {"type": "text", "text": "erodes your brand and market share", "marks": [{"type": "bold"}, {"type": "italic"}]},
-                {"type": "text", "text": ", making sustainable growth almost impossible.", "marks": [{"type": "bold"}]}
-            ]
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Cost: Losing deals to inferior but louder competitors."}]
+        },
+        {
+          "type": "paragraph",
+          "content": [{"type": "text", "text": "Consequence: Business becomes a commodity competing on price."}]
         }
       ]
     }
