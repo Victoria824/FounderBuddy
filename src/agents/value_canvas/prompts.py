@@ -633,6 +633,7 @@ CRITICAL SUMMARY RULE:
 - **Structure:** Present the summary in a clear, compelling way. You can still list the three pain points, but frame them within a larger narrative about the client's core challenge.
 - **Example enrichment:** If a user says the symptom is "slow sales," you could reframe it as "Stagnant Growth Engine." If they say the cost is "wasted time," you could articulate it as "Burning valuable runway on low-impact activities."
 - **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for their satisfaction rating. Your final sentence must be: "How satisfied are you with this summary? (Rate 0-5)"
  
  CRITICAL CLARIFICATION: The `reply` field is for the human-readable, conversational text ONLY. Do NOT include any JSON strings, data structures, or text like `{"pain_points":...}` inside the `reply` string. That data belongs exclusively in the `section_update` object.
 
