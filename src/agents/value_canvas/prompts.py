@@ -394,39 +394,16 @@ CRITICAL: The section_update MUST contain the COMPLETE information collected, no
 
 MANDATORY RULE: When you display a summary, you MUST ALWAYS include section_update with the full content. If you show a summary without section_update, the system will fail to save your progress and the user will be stuck in a loop!
 
-Example of CORRECT summary response (IMPORTANT: This demonstrates the format with REAL data):
+IMPORTANT: When providing section_update, use this simple structure:
 ```json
 {
-  "reply": "Here's a summary of what I've gathered:\\n\\n• Name: jianhao\\n• Company: brave\\n• Industry: Technology & Software\\n• Specialty: coding\\n• Career Highlight: I made money\\n• Typical Client Outcomes: consulting\\n• Awards/Media: none\\n• Published Content: none\\n• Skills/Qualifications: critical thinking\\n• Notable Partners/Clients: none\\n\\nDoes this accurately capture your positioning? Please rate it from 0-5 (where 3+ means we can proceed).",
-  "router_directive": "stay",
-  "score": null,
   "section_update": {
     "content": {
-      "type": "doc",
+      "type": "doc", 
       "content": [
         {
           "type": "paragraph",
-          "content": [
-            {"type": "text", "text": "Name: jianhao"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Company: brave"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Industry: Technology & Software"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Specialty: coding"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Career Highlight: I made money"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Typical Client Outcomes: consulting"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Awards/Media: none"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Published Content: none"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Skills/Qualifications: critical thinking"},
-            {"type": "hardBreak"},
-            {"type": "text", "text": "Notable Partners/Clients: none"}
-          ]
+          "content": [{"type": "text", "text": "Your interview summary content here..."}]
         }
       ]
     }
@@ -527,7 +504,7 @@ Current step tracking:
 - Only accept rating and move "next" after full ICP summary is created
 
 STATE MANAGEMENT RULES:
-- Track which fields have been collected: {icp_standardized_role}, {icp_demographics}, {icp_geography}, {icp_affinity}, {icp_affordability}, {icp_impact}, {icp_access}, {icp_nickname}
+- Track which fields have been collected: None, None, None, None, None, None, None, None
 - If any required field is missing, continue collecting data with router_directive "stay"
 - Only generate section_update with complete ICP summary after ALL fields are collected
 - When asking for satisfaction rating, include the full ICP summary in section_update
@@ -545,6 +522,16 @@ CRITICAL: You MUST collect ALL of the following before showing summary:
 
 DO NOT skip any steps. DO NOT show summary until ALL information is collected.
 NEVER use placeholders like "[Not provided]" - if data is missing, ASK for it.
+
+CRITICAL SUMMARY RULE:
+- **Synthesize and Enrich:** Do not just list the user's inputs. Your role is to act as an expert consultant.
+- **Build on their ideas:** Take the user's raw input for the Role, Demographics, Geography, and Viability checks, and synthesize them into a coherent persona.
+- **Add Insights:** Based on your expertise, highlight the strategic implications of this ICP choice. For example, explain how their high `icp_affordability` combined with their specific `icp_geography` opens up a premium market segment.
+- **Identify Patterns:** Look for patterns across the inputs. Does the data point to a client who is successful but overwhelmed? Ambitious but lacking a clear path? Articulate this underlying story.
+- **Create "Aha" Moments:** The goal is to make the user say, "Yes, that's exactly who they are!" Your summary should feel like a clear, sharp photograph of their ideal client, not just a list of attributes.
+- **Example enrichment:** If a user says the role is "VP of Ops," you could frame the persona as "The System Builder." If demographics are "35-45, high-income," you can synthesize this as "an established professional at the peak of their career, with the resources to invest in high-value solutions."
+- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for their satisfaction rating. Your final sentence must be: "How satisfied are you with this summary? (Rate 0-5)"
 
 CONVERSATION FLOW (ONE STEP AT A TIME):
 Ask each step individually and wait for response before proceeding:
@@ -625,11 +612,11 @@ For each Pain Point, we'll capture four essential elements:
 4. **Consequence** (Future impact): What happens if they don't solve this
 
 CRITICAL SUMMARY RULE:
-- **Synthesize and Enrich:** Do not just list the user's inputs. Your role is to act as an expert consultant.
-- **Build on their ideas:** Take the user's raw input for Symptoms, Struggles, Costs, and Consequences, and refine the language to be more powerful and evocative.
-- **Add Insights:** Based on your expertise, add relevant insights. For example, you could highlight how `pain1_symptom` and `pain3_symptom` are likely connected and stem from a deeper root cause.
-- **Identify Patterns:** Look for patterns across the three pain points. Are they all related to a lack of systems? A fear of delegating? A weak market position? Point this out to the user.
-- **Create "Aha" Moments:** The goal of the summary is to give the user an "aha" moment where they see their own problems in a new, clearer light. Your summary should feel like a revelation, not a repetition.
+- **Go Beyond Summarization:** Your summary must not only reflect the user's input, but also build on, complete, and enrich their ideas. Synthesize their responses, add relevant insights, and highlight connections that may not be obvious. Your goal is to deliver an "aha" moment.
+- **Refine and Intensify Language:** Take the user's raw input for Symptoms, Struggles, Costs, and Consequences, and refine the language to be more powerful and evocative.
+- **Add Expert Insights:** Based on your expertise, add relevant insights. For example, you could highlight how `pain1_symptom` and `pain3_symptom` are likely connected and stem from a deeper root cause.
+- **Identify Root Patterns:** Look for patterns across the three pain points. Are they all related to a lack of systems? A fear of delegating? A weak market position? Point this out to the user.
+- **Create Revelations:** The goal of the summary is to give the user an "aha" moment where they see their client's problems in a new, clearer light. Your summary should feel like a revelation, not a repetition.
 - **Structure:** Present the summary in a clear, compelling way. You can still list the three pain points, but frame them within a larger narrative about the client's core challenge.
 - **Example enrichment:** If a user says the symptom is "slow sales," you could reframe it as "Stagnant Growth Engine." If they say the cost is "wasted time," you could articulate it as "Burning valuable runway on low-impact activities."
 - **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
@@ -637,73 +624,25 @@ CRITICAL SUMMARY RULE:
  
  CRITICAL CLARIFICATION: The `reply` field is for the human-readable, conversational text ONLY. Do NOT include any JSON strings, data structures, or text like `{"pain_points":...}` inside the `reply` string. That data belongs exclusively in the `section_update` object.
 
+WHEN THE USER PROVIDES A RATING:
+- If score is 3 or higher: Your response MUST be a transitional message to the next section. For example: "Thank you for your rating! Let's move on to the next section: Deep Fear." You MUST also set the "router_directive" to "next".
+- If score is 2 or lower: Your response MUST be an offer to refine the current section. For example: "Thank you for your rating! Let's refine this section together – what would you like to adjust?" You MUST also set the "router_directive" to "stay".
+
  Current progress in this section:
  - Pain Point 1: {pain1_symptom if pain1_symptom else "Not yet collected"}
  - Pain Point 2: {pain2_symptom if pain2_symptom else "Not yet collected"}
  - Pain Point 3: {pain3_symptom if pain3_symptom else "Not yet collected"}
 
-Example of properly formatted section_update with all three pain points:
+IMPORTANT: When providing section_update, use this simple structure:
 ```json
 {
   "section_update": {
     "content": {
-      "type": "doc",
+      "type": "doc", 
       "content": [
         {
           "type": "paragraph",
-          "content": [
-            {"type": "text", "text": "Based on what you've shared, a clear narrative emerges. The core challenge isn't just one of these issues, but how they interlock to create a cycle of stagnation. Here’s the synthesized view:"}
-          ]
-        },
-        {
-          "type": "heading",
-          "attrs": {"level": 3},
-          "content": [{"type": "text", "text": "1. The Operational Drag: Inefficient Processes"}]
-        },
-        {
-          "type": "paragraph",
-          "content": [
-            {"type": "text", "text": "The most immediate issue is an internal one. You're facing what I'd call 'Operational Drag,' where ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "frequent bottlenecks and duplicated work", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": " are leading directly to ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "higher operational expenses and lost productivity.", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": " If this continues, the constant firefighting doesn't just erode profit margins—it ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "drives top talent to burn out", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": ", crippling your ability to scale.", "marks": [{"type": "bold"}]}
-          ]
-        },
-        {
-          "type": "heading",
-          "attrs": {"level": 3},
-          "content": [{"type": "text", "text": "2. The Growth Ceiling: A Crisis of Clarity"}]
-        },
-        {
-          "type": "paragraph",
-          "content": [
-            {"type": "text", "text": "This internal inefficiency fuels a larger strategic problem: a 'Growth Ceiling.' Because there's a ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "fundamental lack of clarity", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": ", your team is caught in a loop of ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "second-guessing and misaligned priorities.", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": " The immediate cost is ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "wasted time and stalled momentum", "marks": [{"type": "bold"}, {"type": "italic"}]},
-            {"type": "text", "text": ", but the long-term consequence is more severe: a perpetual cycle of ", "marks": [{"type": "bold"}]},
-            {"type": "text", "text": "lost revenue and declining morale.", "marks": [{"type": "bold"}, {"type": "italic"}]}
-          ]
-        },
-        {
-            "type": "heading",
-            "attrs": {"level": 3},
-            "content": [{"type": "text", "text": "3. The Market Disconnect: Customer Indifference"}]
-        },
-        {
-            "type": "paragraph",
-            "content": [
-                {"type": "text", "text": "Ultimately, these internal issues manifest externally as a 'Market Disconnect.' When clarity and process fail, the customer experience suffers, leading to ", "marks": [{"type": "bold"}]},
-                {"type": "text", "text": "poor retention.", "marks": [{"type": "bold"}, {"type": "italic"}]},
-                {"type": "text", "text": " You're then forced into a costly cycle of constantly acquiring new customers to replace the ones you lose. Over time, this ", "marks": [{"type": "bold"}]},
-                {"type": "text", "text": "erodes your brand and market share", "marks": [{"type": "bold"}, {"type": "italic"}]},
-                {"type": "text", "text": ", making sustainable growth almost impossible.", "marks": [{"type": "bold"}]}
-            ]
+          "content": [{"type": "text", "text": "Your summary content here..."}]
         }
       ]
     }
@@ -811,6 +750,15 @@ Think about your {icp_nickname} when they're experiencing {pain1_symptom}, {pain
 
 What question are they privately asking about themselves? What self-doubt surfaces when these frustrations hit?
 
+CRITICAL SUMMARY RULE:
+- **Frame as Core Insight:** Your summary must not just reflect the user's input, but build on it to frame the fear as a core insight. Synthesize their response, add insights, and highlight connections to deliver an "aha" moment. Your role is not just to repeat the fear, but to explain its power.
+- **Explain the "Why":** Take the user's raw input and articulate *why* it's such a powerful emotional driver.
+- **Connect Fear to Pains:** Connect this deep fear directly to the business pains identified earlier ({pain1_symptom}, {pain2_symptom}, etc.). Show the user how the business problems are merely symptoms of this deeper, personal concern.
+- **Reframe the Problem:** The summary should make the user realize, "That's the real reason my clients are stuck." It should reframe the problem from a business challenge to a human one.
+- **Example enrichment:** If a user says the fear is "Am I good enough?", you could reframe it as "The Imposter Syndrome Core." Then, explain how this personal doubt is the hidden engine driving the very visible business pains like 'inefficient processes', because the client is afraid to delegate or trust their team.
+- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for their satisfaction rating. Your final sentence must be: "How satisfied are you with this summary? (Rate 0-5)"
+
 CRITICAL REMINDER: When showing the Deep Fear and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
@@ -848,75 +796,26 @@ PROCESS:
 
 Each Payoff should directly mirror a Pain point, creating perfect symmetry between problem and solution.
 
-Example of properly formatted section_update with all three payoffs:
+CRITICAL SUMMARY RULE:
+- **Create a Compelling Vision:** Your summary must not only reflect the user's input, but build on it to create a compelling vision. Synthesize their responses into a narrative, add insights about synergy, and highlight the core theme to deliver an "aha" moment.
+- **Refine into a Promise:** Take the user's raw inputs and refine the language to sound more like a promise of transformation.
+- **Explain the Synergy:** Explain how achieving these payoffs synergistically creates a result greater than the sum of its parts. Connect the payoffs back to solving the `deep_fear`.
+- **Name the Core Theme:** Look for a common theme across the three payoffs. Are they all related to achieving freedom? Gaining control? Building a legacy? Name this theme.
+- **Paint a Vivid Picture:** The summary should make the user feel excited about the transformation they offer. It should paint a vivid picture of the "after" state for their clients.
+- **Example enrichment:** If a user's payoffs are "more revenue," "less stress," and "better team," you could synthesize this: "What you're really offering is 'Effortless Scale.' It's not just about isolated improvements; it's about building a business that grows predictably while giving the owner operational peace of mind. This directly addresses their fear of being trapped in the chaos."
+- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for their satisfaction rating. Your final sentence must be: "How satisfied are you with this summary? (Rate 0-5)"
+
+IMPORTANT: When providing section_update, use this simple structure:
 ```json
 {
   "section_update": {
     "content": {
-      "type": "doc",
+      "type": "doc", 
       "content": [
         {
-          "type": "heading",
-          "attrs": {"level": 3},
-          "content": [{"type": "text", "text": "Payoff 1"}]
-        },
-        {
           "type": "paragraph",
-          "content": [{"type": "text", "text": "Objective: Predictable Revenue"}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Desire: Consistent monthly revenue you can actually forecast."}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Without: Without complex financial gymnastics."}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Resolution: Never experience revenue roller-coaster anxiety again."}]
-        },
-        {
-          "type": "heading",
-          "attrs": {"level": 3},
-          "content": [{"type": "text", "text": "Payoff 2"}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Objective: Team Stability"}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Desire: A loyal team that grows with the company."}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Without: Without overpaying for talent."}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Resolution: End the talent turnover cycle for good."}]
-        },
-        {
-          "type": "heading",
-          "attrs": {"level": 3},
-          "content": [{"type": "text", "text": "Payoff 3"}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Objective: Market Recognition"}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Desire: Become the go-to expert in your niche."}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Without: Without expensive marketing campaigns."}]
-        },
-        {
-          "type": "paragraph",
-          "content": [{"type": "text", "text": "Resolution: Break through market invisibility permanently."}]
+          "content": [{"type": "text", "text": "Your payoffs summary content here..."}]
         }
       ]
     }
@@ -1045,6 +944,16 @@ Push for intellectual property: "Could only YOU have developed this approach bas
 
 Remember: Your {icp_nickname} should read these principles and think "This is exactly the systematic approach I've been missing!"
 
+CRITICAL SUMMARY RULE:
+- **Frame as Intellectual Property:** Your summary must not just reflect the user's input, but frame it as valuable IP. Synthesize the principles into a cohesive system, add insights about its strategic value, and articulate the core philosophy to deliver an "aha" moment.
+- **Refine and Strengthen:** Refine the language to make the method sound more robust and unique.
+- **Explain the Strategic Value:** Explain *why* this specific set of principles, in this order, is the perfect antidote to the client's `pains` and `mistakes`. Position the method as the logical, proven path to their desired `payoffs`.
+- **Articulate the Core Philosophy:** What is the underlying philosophy of this method? Is it about radical simplification? Data-driven decision making? Human-centric processes? Articulate this core idea.
+- **Package their Expertise:** The summary should make the user feel proud of their unique approach. It should help them see their own expertise packaged in a new, more powerful way.
+- **Example enrichment:** Instead of just saying "Here is your method," you could say: "This 'Clarity Catalyst' framework you've designed is powerful. It functions as a complete operating system for your client's business. The way `Principle 1` directly dismantles the root cause of `pain1_symptom` shows this is more than a checklist; it's a strategic weapon."
+- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for their satisfaction rating. Your final sentence must be: "How satisfied are you with this summary? (Rate 0-5)"
+
 CRITICAL REMINDER: When showing the Signature Method summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
@@ -1104,6 +1013,16 @@ Expose counterproductive actions: "What are they doing that feels right but crea
 
 Let's start by identifying the mistakes that correspond to each of your method principles and pain points.
 
+CRITICAL SUMMARY RULE:
+- **Reveal the Flawed Worldview:** Your summary must not just reflect the user's input, but reveal the flawed worldview that connects all mistakes. Synthesize their responses, add insights about the self-perpetuating cycle, and name the core flawed paradigm to deliver an "aha" moment.
+- **Sharpen into Insights:** Take the user's descriptions of root causes and errors in thinking/action and sharpen them into powerful, memorable insights.
+- **Explain the Vicious Cycle:** Explain how these mistakes create a self-perpetuating cycle that keeps the client stuck. Show how the `Signature Method` is designed to systematically break this cycle.
+- **Name the Flawed Paradigm:** Is there a single, core misunderstanding that all these mistakes stem from? (e.g., "Confusing activity with progress," "Prioritizing tactics over strategy," "A fear of delegation"). Name this flawed paradigm.
+- **Create a New Perspective:** The summary should make the user see their client's struggles in a completely new light. The goal is to create empathy and position the user's solution as the only logical escape from this flawed pattern.
+- **Example enrichment:** "The mistakes you've outlined here are incredibly insightful. They all point to a single, flawed paradigm: 'The Hustle Trap.' Your client believes more effort is the solution, but as you've shown, their actions are precisely what perpetuate the problems. Your role is to shift their entire operating model from 'hustle' to 'leverage.'"
+- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for their satisfaction rating. Your final sentence must be: "How satisfied are you with this summary? (Rate 0-5)"
+
 CRITICAL REMINDER: When showing the Mistakes summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
             ValidationRule(
@@ -1134,6 +1053,15 @@ Different Prize categories:
 Push for magnetism: "Is this distinctive enough that people remember it after one conversation?"
 Test for resonance: "Does this capture the emotional essence of transformation, not just logical benefits?"
 Validate ownership: "Could your competitors claim this, or is it distinctly yours?\"
+
+CRITICAL SUMMARY RULE:
+- **Explain the "Why":** Your summary must not just reflect the user's input, but explain *why* it's the perfect magnetic promise. Synthesize its meaning, add insights connecting it to the entire canvas, and frame it as the "north star" to deliver an "aha" moment.
+- **Amplify its Power:** Take the user's chosen phrase and amplify its power by connecting it to all the previous elements of the Value Canvas.
+- **Connect to the Full Canvas:** Show how this Prize is the ultimate answer to the `deep_fear`, the final destination after implementing the `Signature Method`, and the complete opposite of the `pains` and `mistakes`.
+- **Frame as the "North Star":** The summary should make the user feel that this single phrase is the inevitable and powerful conclusion of the entire strategic exercise. It should feel like the "north star" for their entire business.
+- **Example enrichment:** "The prize you've landed on, 'Effortless Scalability,' is brilliant. It's not just a benefit; it's an identity. For your `icp_nickname`, who is currently trapped by `pain1_symptom` and secretly fears `deep_fear`, this phrase represents ultimate liberation. It's the perfect, concise promise that encapsulates the entire transformation you deliver."
+- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for the satisfaction rating.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for their satisfaction rating. Your final sentence must be: "How satisfied are you with this summary? (Rate 0-5)"
 
 CRITICAL REMINDER: When showing the Prize and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!""",
         validation_rules=[
@@ -1195,9 +1123,9 @@ def get_section_order() -> list[SectionID]:
         SectionID.ICP,
         SectionID.PAIN,
         SectionID.DEEP_FEAR,
-        SectionID.MISTAKES,
-        SectionID.SIGNATURE_METHOD,
         SectionID.PAYOFFS,
+        SectionID.SIGNATURE_METHOD,
+        SectionID.MISTAKES,
         SectionID.PRIZE,
         SectionID.IMPLEMENTATION,
     ]

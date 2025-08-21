@@ -1,6 +1,7 @@
 """Value Canvas Agent implementation using LangGraph StateGraph."""
 
 import logging
+import re
 from typing import Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -129,6 +130,8 @@ async def initialize_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         state["error_count"] = 0
     if "last_error" not in state:
         state["last_error"] = None
+    if "is_awaiting_rating" not in state:
+        state["is_awaiting_rating"] = False
     if "messages" not in state:
         state["messages"] = []
     
@@ -270,14 +273,79 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     
     # DEBUG: Log recent message history
     logger.info("MESSAGE_HISTORY_DEBUG: Last 3 messages:")
-    recent_msgs = state.get("messages", [])[-3:]
-    for i, msg in enumerate(recent_msgs):
-        msg_type = "Human" if hasattr(msg, '__class__') and 'Human' in msg.__class__.__name__ else "AI"
-        content = str(msg.content)[:100] if hasattr(msg, 'content') else str(msg)[:100]
-        logger.info(f"MESSAGE_HISTORY_DEBUG: [{i}] {msg_type}: {content}...")
-    
-    # [DIAGNOSTIC] Log context packet
-    logger.info(f"DEBUG_CHAT_AGENT: Context Packet received: {state.get('context_packet')}")
+    for i, msg in enumerate(state["messages"][-3:]):
+        logger.info(f"MESSAGE_HISTORY_DEBUG: [{i}] {msg.type.capitalize()}: {msg.content[:50]}...")
+
+    # --- Pre-LLM check for explicit numeric rating ---
+    # If the user provides a clear 0-5 rating, we can handle it programmatically
+    # without an LLM call, making the response faster and more reliable.
+    last_message = state["messages"][-1]
+    user_rating = None
+    is_expecting_rating = state.get("is_awaiting_rating", False)
+
+    # After this check, we will no longer be awaiting a rating, so reset the flag.
+    state["is_awaiting_rating"] = False
+
+    if is_expecting_rating and isinstance(last_message, HumanMessage):
+        try:
+            # Use regex to find a single digit between 0-5 that exists on its own
+            content = last_message.content.strip()
+            if re.fullmatch(r"[0-5]", content):
+                parsed_score = int(content)
+                user_rating = parsed_score
+        except (ValueError, TypeError):
+            pass  # Not a simple numeric rating, will proceed to LLM.
+
+    if user_rating is not None:
+        logger.info(f"Detected explicit user rating: {user_rating}. Bypassing LLM call.")
+        
+        if user_rating >= 3:
+            # High score: Generate transition message to the next section.
+            from .prompts import SECTION_TEMPLATES, get_next_unfinished_section
+            
+            # To predict the correct next section, we temporarily mark the current one as done.
+            temp_states = state.get("section_states", {}).copy()
+            current_section_id = state["current_section"].value
+            
+            if current_section_id not in temp_states:
+                temp_states[current_section_id] = {}
+            temp_states[current_section_id]['status'] = SectionStatus.DONE.value
+
+            next_section = get_next_unfinished_section(temp_states)
+            
+            if next_section:
+                next_section_name = SECTION_TEMPLATES.get(next_section.value).name
+                reply_msg = f"Thank you for your rating! Let's move on to the next section: {next_section_name}."
+            else:
+                reply_msg = "Thank you for your rating! We've completed all sections."
+            
+            directive = "next"
+        else:
+            # Low score: Generate message to encourage revision.
+            reply_msg = "Thank you for your rating! Let's refine this section together – what would you like to adjust?"
+            directive = "stay"
+
+        agent_output = ChatAgentOutput(reply=reply_msg, router_directive=directive, score=user_rating, section_update=None)
+        
+        # Update state and return immediately, skipping the LLM call.
+        state["agent_output"] = agent_output
+        state["router_directive"] = directive
+        state["messages"].append(AIMessage(content=agent_output.reply))
+        
+        # Also update short-term memory for context consistency.
+        base_mem = state.get("short_memory", [])
+        base_mem.append(last_message)
+        base_mem.append(AIMessage(content=agent_output.reply))
+        state["short_memory"] = base_mem
+        
+        return state
+    # --- End of pre-LLM check ---
+
+    # Create a new context packet for this turn
+    context_packet = state.get('context_packet')
+    logger.info(
+        f"DEBUG_CHAT_AGENT: Context Packet received: {context_packet}"
+    )
 
     # Get LLM - no tools for chat agent per design doc
     # Use GPT-4O model configuration
@@ -285,7 +353,6 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     
     messages: list[BaseMessage] = []
     last_human_msg: HumanMessage | None = None
-    user_rating: int | None = None  # capture explicit 0-5 rating if provided
 
     # Check if we should add summary instruction
     # Add summary instruction when:
@@ -312,7 +379,7 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     # Forcing summary instructions here causes premature summaries.
     
     # Only add summary reminder if section already has saved content that needs rating
-    if section_has_content and user_rating is None and not awaiting:
+    if section_has_content and not awaiting:
         # This is for sections that were previously saved but need rating
         summary_reminder = (
             "The user has previously worked on this section. "
@@ -405,68 +472,45 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         if isinstance(_last_msg, HumanMessage):
             messages.append(_last_msg)
             last_human_msg = _last_msg
-            # Attempt to detect if user provided a simple numeric rating 0-5
-            if isinstance(_last_msg.content, list):
-                for item in _last_msg.content:
-                    if item.get("type") == "text":
-                        txt = item.get("text", "").strip()
-                        if txt.isdigit() and txt in {"0","1","2","3","4","5"}:
-                            user_rating = int(txt)
-                        break
-            else:
-                txt = str(_last_msg.content).strip()
-                if txt.isdigit() and txt in {"0","1","2","3","4","5"}:
-                    user_rating = int(txt)
 
-    # Check if we're in a situation where user rated but section has no content
-    if user_rating is not None and current_section == SectionID.INTERVIEW:
-        section_state = state.get("section_states", {}).get(current_section.value, {})
-        if not section_state or not section_state.get("content"):
-            logger.warning(f"User provided rating {user_rating} but {current_section.value} has no content saved!")
-            # Add instruction to re-display summary WITH section_update
-            messages.append(SystemMessage(content=(
-                "CRITICAL ERROR: The user has provided a rating, but the Interview section has no saved content! "
-                "You MUST re-display the complete summary WITH section_update before proceeding. "
-                "This is causing a loop because the system cannot move forward without saved content. "
-                "Display the full summary again and include section_update with all the information you've collected."
-            )))
-    
-    # If user provided an explicit rating, override LLM output requirements
-    if user_rating is not None:
-        # fabricate a minimal agent output – we don't need LLM call for simple acknowledgement
-        current_section = state["current_section"]
+    # --- Pre-LLM Context Injection ---
+    # To prevent the LLM from hallucinating the next section's name, we calculate it
+    # programmatically and provide it as a direct instruction.
+    try:
+        from .prompts import SECTION_TEMPLATES, get_next_unfinished_section
         
-        # According to design doc, rating happens at the END of each section
-        # High rating (>=3) should always trigger NEXT to move to next section
-        calculated_directive = RouterDirective.NEXT if user_rating >= 3 else RouterDirective.STAY
+        temp_states = state.get("section_states", {}).copy()
+        current_section_id = state["current_section"].value
         
-        if calculated_directive == RouterDirective.NEXT:
-            # Get the next section name for the transition message
-            from .prompts import SECTION_TEMPLATES, get_next_section
-            next_section = get_next_section(current_section)
-            if next_section:
-                next_section_name = SECTION_TEMPLATES.get(next_section.value).name
-                reply_msg = f"Thank you for your rating! Let's move on to the next section: {next_section_name}."
-            else:
-                reply_msg = "Thank you for your rating! We've completed all sections."
-        else:
-            # Low rating means we need to refine current section
-            reply_msg = "Thank you for your rating! Let's refine this section together – what would you like to adjust?"
+        if current_section_id not in temp_states:
+            temp_states[current_section_id] = {}
+        # Assume the current section will be completed in this turn for prediction
+        temp_states[current_section_id]['status'] = SectionStatus.DONE.value
+
+        next_section = get_next_unfinished_section(temp_states)
         
-        agent_output = ChatAgentOutput(reply=reply_msg, router_directive=calculated_directive.value, score=user_rating, section_update=None)
-        state["agent_output"] = agent_output
-        state["router_directive"] = calculated_directive
-        state["awaiting_user_input"] = (calculated_directive==RouterDirective.STAY)
-        # append to history
-        state["messages"].append(AIMessage(content=agent_output.reply))
-        return state
+        if next_section:
+            next_section_name = SECTION_TEMPLATES.get(next_section.value).name
+            instructional_prompt = (
+                f"SYSTEM INSTRUCTION: The next section is '{next_section_name}'. "
+                "If the user confirms to proceed, you MUST use this exact name in your transition message."
+            )
+            messages.append(SystemMessage(content=instructional_prompt))
+            logger.info(f"Injected next section name into context: '{next_section_name}'")
+    except Exception as e:
+        logger.warning(f"Could not determine next section for prompt injection: {e}")
+    # --- End of Pre-LLM Context Injection ---
 
     try:
         # Use structured output for reliable JSON parsing with token limits
         structured_llm = llm.with_structured_output(ChatAgentOutput)
         # Add token limits to prevent infinite generation
         if hasattr(structured_llm, 'bind'):
-            structured_llm = structured_llm.bind(max_tokens=4000)
+            structured_llm = structured_llm.bind(
+                max_tokens=3000,  # Reasonable limit for content generation
+                temperature=0.3,  # Balanced creativity and consistency
+                top_p=0.9        # Good sampling control
+            )
         agent_output = await structured_llm.ainvoke(messages)
 
         # DEBUG: Log the full agent output
@@ -504,32 +548,29 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         # DEBUG: Check state consistency
         logger.info(f"AGENT_OUTPUT_DEBUG: Current section_states: {list(state.get('section_states', {}).keys())}")
 
-        # CRITICAL FIX: Validate score input
-        # Only accept score if the user's last message is EXACTLY a single digit 0-5
-        if agent_output.score is not None:
-            # Get the last user message text
-            user_text = ""
-            if last_human_msg and last_human_msg.content:
-                if isinstance(last_human_msg.content, list):
-                    for item in last_human_msg.content:
-                        if item.get("type") == "text":
-                            user_text = item.get("text", "").strip()
-                            break
-                else:
-                    user_text = str(last_human_msg.content).strip()
-            
-            # Check if the user input is EXACTLY a single digit 0-5
-            import re
-            if not re.match(r'^[0-5]$', user_text):
-                # User didn't provide a valid score, override the LLM's decision
-                logger.info(f"DEBUG: Invalid score input '{user_text}', overriding LLM score")
-                agent_output.score = None
-                agent_output.router_directive = RouterDirective.STAY.value
+        # Rely entirely on the LLM for score.
+        # Add a safety rail: if the LLM provides a low score, force a 'stay' directive
+        # to ensure the user can revise the section, overriding any other directive.
+        if agent_output.score is not None and agent_output.score < 3:
+            logger.info(f"Low score ({agent_output.score}) detected from LLM. Forcing 'stay' directive.")
+            agent_output.router_directive = "stay"
+
+        # NEW: Explicitly set the is_awaiting_rating flag based on the structured output from the LLM.
+        # This is more robust than keyword matching.
+        if agent_output.is_requesting_rating:
+            state["is_awaiting_rating"] = True
+            logger.info("State updated: is_awaiting_rating set to True based on agent output flag.")
+        else:
+            state["is_awaiting_rating"] = False
+
+
+        logger.info(f"DEBUG_CHAT_AGENT: Agent output generated: {agent_output}")
+
+        # Save section_update to a temporary key to be processed by the memory updater
+        state["temp_agent_output"] = agent_output # Store the full agent_output for memory_updater
 
         # Determine router directive based on score, per design doc
         if agent_output.score is not None:
-            # According to design doc, rating happens at the END of each section
-            # High rating (>=3) should trigger NEXT to move to next section
             if agent_output.score >= 3:
                 calculated_directive = RouterDirective.NEXT
             else:
@@ -537,19 +578,6 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
                 
             state["router_directive"] = calculated_directive
             
-            # If score-based logic says NEXT but LLM didn't generate transition message,
-            # override the reply to be a transition message
-            if calculated_directive == RouterDirective.NEXT:
-                # Predict what the next section will be
-                current_section = state["current_section"]
-                predicted_next = get_next_section(current_section)
-                
-                if predicted_next:
-                    next_section_name = SECTION_TEMPLATES.get(predicted_next.value).name
-                    agent_output.reply = f"Great! Let's move on to the next section: {next_section_name}."
-                else:
-                    agent_output.reply = "Great! We've completed all sections."
-
         else:
             # Fallback to value supplied by model (may be stay/next/modify)
             state["router_directive"] = agent_output.router_directive
@@ -563,7 +591,6 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         )
 
         if need_question:
-            import re
             # 如果 reply 中既没有问号也没有明确的指令词，则追加提示
             has_question = re.search(r"[?？]", agent_output.reply, re.IGNORECASE)
             has_instruction = any(word in agent_output.reply.lower() for word in [
@@ -810,12 +837,22 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 # The content in state should now be the correct Tiptap document
                 content_to_save = state["section_states"][score_section_id].get("content")
             
-            # 2. If not in state, recover from previous message history
+            # 2. If not in state, recover from previous message history with improved logic
             if not content_to_save:
                 logger.warning(f"SAVE_SECTION_DEBUG: Content for {score_section_id} not in state, recovering from history.")
                 messages = state.get("messages", [])
-                if len(messages) >= 2 and isinstance(messages[-1], HumanMessage) and isinstance(messages[-2], AIMessage):
-                    summary_text = messages[-2].content
+                summary_text = None
+                # Search backwards through the message history to find the last summary message.
+                for msg in reversed(messages):
+                    if isinstance(msg, AIMessage):
+                        # A summary message typically contains these keywords.
+                        content_lower = msg.content.lower()
+                        if "summary" in content_lower and ("satisfied" in content_lower or "rate 0-5" in content_lower):
+                            summary_text = msg.content
+                            logger.info("SAVE_SECTION_DEBUG: Found candidate summary message in history.")
+                            break
+                
+                if summary_text:
                     logger.info("SAVE_SECTION_DEBUG: Recovered summary text, converting to Tiptap format.")
                     content_to_save = await create_tiptap_content.ainvoke({"text": summary_text})
                 else:

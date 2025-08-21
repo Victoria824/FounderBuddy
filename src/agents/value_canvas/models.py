@@ -1,7 +1,7 @@
 '''Pydantic models for Value Canvas Agent.'''
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from langchain_core.messages import BaseMessage
@@ -62,23 +62,23 @@ TiptapInlineNode = TiptapTextNode | TiptapHardBreakNode
 class TiptapParagraphNode(BaseModel):
     """Tiptap paragraph node."""
     type: Literal["paragraph"] = "paragraph"
-    content: list[TiptapInlineNode] = Field(default_factory=list, max_length=50)
+    content: list[TiptapInlineNode] = Field(default_factory=list, max_length=10)  # Balanced limit
     attrs: dict[str, Any] | None = None
 
 
 class TiptapNode(BaseModel):
     """Base Tiptap node structure."""
     type: str
-    content: list[TiptapInlineNode] | None = Field(None, max_length=50)
+    content: list[TiptapInlineNode] | None = Field(None, max_length=5)  # Further reduced
     text: str | None = None
     attrs: dict[str, Any] | None = None
-    marks: list[dict[str, Any]] | None = Field(None, max_length=5)
+    marks: list[dict[str, Any]] | None = Field(None, max_length=2)  # Further reduced
 
 
 class TiptapDocument(BaseModel):
     """Tiptap document structure."""
     type: Literal["doc"] = "doc"
-    content: list[TiptapParagraphNode] = Field(default_factory=list, max_length=20)
+    content: list[TiptapParagraphNode] = Field(default_factory=list, max_length=15)  # Increased for better content
 
 
 class SectionContent(BaseModel):
@@ -193,12 +193,16 @@ class ChatAgentOutput(BaseModel):
         ...,
         description="Navigation control: 'stay' to continue on the current section, 'next' to proceed to the next section, or 'modify:<section_id>' to jump to a specific section.",
     )
+    is_requesting_rating: bool = Field(
+        default=False,
+        description="Set to true ONLY when your reply explicitly asks the user for a 0-5 rating."
+    )
     score: int | None = Field(
         None, ge=0, le=5, description="Satisfaction score (0-5) if user provided one."
     )
-    section_update: SectionContent | None = Field(
+    section_update: dict[str, Any] | None = Field(
         None,
-        description="Tiptap JSON object containing the complete summary for the current section. This should only be included when the section is complete and ready to be saved.",
+        description="Simple object containing the content for the current section. Use basic structure when provided.",
     )
 
     @field_validator("router_directive")
@@ -259,6 +263,7 @@ class ValueCanvasState(MessagesState):
     agent_output: ChatAgentOutput | None = None
     # Flag indicating the agent has asked a question and is waiting for user's reply
     awaiting_user_input: bool = False
+    is_awaiting_rating: bool = False # NEW: Explicit state to track if we're waiting for a rating
 
     # Error tracking
     error_count: int = 0
