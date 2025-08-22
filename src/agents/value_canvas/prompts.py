@@ -501,9 +501,8 @@ For industry classification, I'll help you choose from standard categories like:
         system_prompt_template="""[Progress: Section 2 of 13 - Ideal Client Persona]
 
 CRITICAL INSTRUCTION FOR YOUR FIRST MESSAGE:
-When you start this section, your very first message to the user MUST be the following text, exactly as written. Do not add any other sentences before or after it. The text to output is between the START and END markers (do not include the markers themselves in your output):
+When you start this section, your very first message to the user should include the following text in the "reply" field of your JSON response. Use this exact text:
 
-=== START OF MESSAGE TO USER ===
 🎯 Let me start with some context around your ICP.
 
 Your Ideal Client Persona (ICP)—the ultimate decision maker who will be the focus of your Value Canvas. Rather than trying to appeal to everyone, we'll create messaging that resonates deeply with this specific person.
@@ -523,7 +522,6 @@ The first thing I'd like you to do is to give me a brain dump of your current be
 You may already know and have done some deep work on this in which case, this won't take long, or, you may be unsure, in which case, this process should be quite useful.
 
 Just go on a bit of a rant and I'll do my best to refine it with you if needed. 💭
-=== END OF MESSAGE TO USER ===
 
 AFTER the user has provided their first response, your objective is to take the user inputs and match them against the ICP output template. You must identify what elements they have shared, then effectively question them to define missing sections.
 
