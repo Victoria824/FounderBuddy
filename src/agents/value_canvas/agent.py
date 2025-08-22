@@ -10,7 +10,7 @@ from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 
-from core.llm import get_model
+from core.llm import get_model, LLMConfig
 
 from .models import (
     ChatAgentOutput,
@@ -160,6 +160,10 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     logger.info(
         f"Router node - Current section: {state['current_section']}, Directive: {state['router_directive']}"
     )
+
+    # CRITICAL FIX: Clear previous agent_output to prevent stale data from being sent to frontend
+    if "agent_output" in state:
+        state["agent_output"] = None
     
     # [DIAGNOSTIC] Log the entire state for debugging
     state_for_log = state.copy()
@@ -283,8 +287,8 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     )
 
     # Get LLM - no tools for chat agent per design doc
-    # Use GPT-4O model configuration
-    llm = get_model(config["configurable"]["model"])
+    # Use centralized configuration
+    llm = get_model()
     
     messages: list[BaseMessage] = []
     last_human_msg: HumanMessage | None = None
@@ -446,9 +450,8 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         # Add token limits to prevent infinite generation
         if hasattr(structured_llm, 'bind'):
             structured_llm = structured_llm.bind(
-                max_tokens=3000,  # Reasonable limit for content generation
-                temperature=0.3,  # Balanced creativity and consistency
-                top_p=0.9        # Good sampling control
+                max_tokens=LLMConfig.DEFAULT_MAX_TOKENS,
+                top_p=LLMConfig.DEFAULT_TOP_P
             )
         agent_output = await structured_llm.ainvoke(messages)
 
@@ -725,7 +728,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 """
                 
                 # 3. Get the LLM and bind it to our desired structured output model
-                llm = get_model(config["configurable"]["model"])
+                llm = get_model()
                 structured_llm = llm.with_structured_output(extraction_model)
                 # Add token limits to prevent infinite generation
                 if hasattr(structured_llm, 'bind'):

@@ -3,7 +3,7 @@ from typing import Any, Literal, NotRequired
 from pydantic import BaseModel, Field, SerializeAsAny
 from typing_extensions import TypedDict
 
-from core.models import AllModelEnum, AnthropicModelName, OpenAIModelName
+from core.models import AllModelEnum
 
 
 class AgentInfo(BaseModel):
@@ -32,8 +32,9 @@ class ServiceMetadata(BaseModel):
         description="Default agent used when none is specified.",
         examples=["research-assistant"],
     )
-    default_model: AllModelEnum = Field(
-        description="Default model used when none is specified.",
+    default_model: AllModelEnum | None = Field(
+        description="Default model (server-managed, not user-selectable).",
+        default=None,
     )
 
 
@@ -43,12 +44,6 @@ class UserInput(BaseModel):
     message: str = Field(
         description="User input to the agent.",
         examples=["What is the weather in Tokyo?"],
-    )
-    model: SerializeAsAny[AllModelEnum] | None = Field(
-        title="Model",
-        description="LLM Model to use for the agent.",
-        default=OpenAIModelName.GPT_4O_MINI,
-        examples=[OpenAIModelName.GPT_4O_MINI, AnthropicModelName.HAIKU_35],
     )
     thread_id: str | None = Field(
         description="Thread ID to persist and continue a multi-turn conversation.",

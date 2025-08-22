@@ -193,13 +193,11 @@ router = APIRouter(dependencies=[Depends(verify_bearer)])
 
 @router.get("/info")
 async def info() -> ServiceMetadata:
-    models = list(settings.AVAILABLE_MODELS)
-    models.sort()
     return ServiceMetadata(
         agents=get_all_agent_info(),
-        models=models,
+        models=[],  # Models are server-managed, not user-selectable
         default_agent=DEFAULT_AGENT,
-        default_model=settings.DEFAULT_MODEL,
+        default_model=None,  # Model selection is server-internal
     )
 
 
@@ -233,7 +231,6 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
     # Build the configurable dict
     configurable = {
         "thread_id": thread_id,
-        "model": "gpt-4o",  # FORCE gpt-4o for stability
         "user_id": user_id,
     }
     
@@ -291,7 +288,7 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> Invoke
     logger.info(f"=== INVOKE_REQUEST: agent_id={agent_id} ===")
     logger.info(f"INVOKE_REQUEST: user_id={user_input.user_id}")
     logger.info(f"INVOKE_REQUEST: thread_id={user_input.thread_id}")
-    logger.info(f"INVOKE_REQUEST: model={user_input.model}")
+    # Model selection is handled by server configuration
     logger.info(f"INVOKE_REQUEST: message_length={len(user_input.message) if user_input.message else 0}")
     logger.info(f"INVOKE_REQUEST: agent_config={user_input.agent_config}")
     
@@ -374,7 +371,7 @@ async def message_generator(
     logger.info(f"=== STREAM_REQUEST: agent_id={agent_id} ===")
     logger.info(f"STREAM_REQUEST: user_id={user_input.user_id}")
     logger.info(f"STREAM_REQUEST: thread_id={user_input.thread_id}")
-    logger.info(f"STREAM_REQUEST: model={user_input.model}")
+    # Model selection is handled by server configuration
     logger.info(f"STREAM_REQUEST: stream_tokens={user_input.stream_tokens}")
     logger.info(f"STREAM_REQUEST: message_length={len(user_input.message) if user_input.message else 0}")
     
