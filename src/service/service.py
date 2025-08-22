@@ -392,6 +392,12 @@ async def message_generator(
             new_messages = []
             if stream_mode == "updates":
                 for node, updates in event.items():
+                    # FINAL FIX: The 'chat_agent' node's update contains the full message,
+                    # which we don't want to process again as it's already handled by the 'messages' stream.
+                    # We ignore it to prevent duplicate messages on the frontend.
+                    if node == "chat_agent":
+                        continue
+
                     # A simple approach to handle agent interrupts.
                     # In a more sophisticated implementation, we could add
                     # some structured ChatMessage type to return the interrupt value.
