@@ -177,8 +177,61 @@ class ValueCanvasData(BaseModel):
     refined_prize: str | None = None
 
 
+class ChatAgentDecision(BaseModel):
+    """Structured decision data from Decision Agent node."""
+    
+    router_directive: str = Field(
+        ...,
+        description="Navigation control: 'stay' to continue on the current section, 'next' to proceed to the next section, or 'modify:<section_id>' to jump to a specific section.",
+    )
+    is_requesting_rating: bool = Field(
+        default=False,
+        description="Set to true ONLY when the previous reply explicitly asked the user for a 0-5 rating."
+    )
+    score: int | None = Field(
+        None, ge=0, le=5, description="Satisfaction score (0-5) if user provided one."
+    )
+    section_update: dict[str, Any] | None = Field(
+        None,
+        description="Content for the current section in Tiptap JSON format. REQUIRED when providing summary or asking for rating. Example: {'content': {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'content here'}]}]}}",
+    )
+
+    @field_validator("router_directive")
+    def validate_router_directive(cls, v):
+        """Validate the router_directive field."""
+        if v not in ["stay", "next"] and not v.startswith("modify:"):
+            raise ValueError(
+                "router_directive must be 'stay', 'next', or start with 'modify:'"
+            )
+        if v.startswith("modify:"):
+            section_id = v.split(":", 1)[1]
+            if not section_id:
+                raise ValueError("modify directive must include a section_id")
+        return v
+
+    @field_validator("section_update")
+    def validate_section_update(cls, v):
+        """Validate section_update with relaxed rules to allow LLM flexibility."""
+        if v is None:
+            return v
+            
+        # Basic structure check - just ensure it's a dict
+        if not isinstance(v, dict):
+            raise ValueError("Section update must be a dictionary")
+            
+        # Very minimal validation - just check for obviously broken structure
+        if 'content' in v:
+            content = v['content']
+            if isinstance(content, dict) and 'content' in content:
+                # Only check for extremely large content that could cause issues
+                if len(content.get('content', [])) > 200:  # Much more lenient limit
+                    raise ValueError("Section content extremely large - please reduce")
+        
+        return v
+
+
 class ChatAgentOutput(BaseModel):
-    """Output from Chat Agent node."""
+    """Complete output from Chat Agent (reply + decision data)."""
 
     reply: str = Field(..., description="Conversational response to the user.")
     router_directive: str = Field(
