@@ -5,6 +5,7 @@ from langgraph.pregel import Pregel
 
 from .value_canvas.agent import graph as value_canvas_agent
 from .social_pitch.agent import graph as social_pitch_agent
+from .mission_pitch.agent import graph as mission_pitch_agent
 from schema import AgentInfo
 
 DEFAULT_AGENT = "value-canvas"
@@ -29,6 +30,10 @@ agents: dict[str, Agent] = {
     "social-pitch": Agent(
         description="A Social Pitch creation agent that guides users through building compelling 6-component business introductions",
         graph=social_pitch_agent,
+    ),
+    "mission-pitch": Agent(
+        description="A Mission Pitch creation agent that guides organizations through defining their purpose, vision, and strategic direction",
+        graph=mission_pitch_agent,
     ),
 }
 

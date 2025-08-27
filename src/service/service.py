@@ -26,6 +26,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from agents import DEFAULT_AGENT, AgentGraph, get_agent, get_all_agent_info
 from agents.value_canvas.agent import initialize_value_canvas_state
+from agents.mission_pitch.agent import initialize_mission_pitch_state
+from agents.social_pitch.agent import initialize_social_pitch_state
 from agents.value_canvas.prompts import SECTION_TEMPLATES
 from core import settings
 from integrations.dentapp.dentapp_utils import SECTION_ID_MAPPING
@@ -205,7 +207,7 @@ async def info() -> ServiceMetadata:
     )
 
 
-async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[str, Any], UUID]:
+async def _handle_input(user_input: UserInput, agent: AgentGraph, agent_id: str) -> tuple[dict[str, Any], UUID]:
     """
     Parse user input and handle any required interrupt resumption.
     Returns kwargs for agent invocation and the run_id.
@@ -220,9 +222,21 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
         callbacks.append(langfuse_handler)
 
     if not thread_id:
-        # This is a new conversation - generate new thread_id and let graph initialize naturally
-        thread_id = str(uuid4())
-        logger.info(f"Generated new thread with ID: {thread_id}")
+        # This is a new conversation, so we need to initialize a new state
+        if agent_id == "value-canvas":
+            initial_state = await initialize_value_canvas_state(user_id=user_id)
+        elif agent_id == "mission-pitch":
+            initial_state = await initialize_mission_pitch_state(user_id=user_id)
+        elif agent_id == "social-pitch":
+            initial_state = await initialize_social_pitch_state(user_id=user_id)
+        else:
+            raise ValueError(f"Unknown agent: {agent_id}")
+        
+        # Get the generated thread_id from initial_state
+        user_id = initial_state.get("user_id")
+        thread_id = initial_state.get("thread_id")
+        
+        logger.info(f"Initialized new thread with ID: {thread_id}")
     else:
         # This is an existing conversation, so we load the state
         logger.info(f"Loading existing thread with ID: {thread_id}")
@@ -303,7 +317,7 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> Invoke
     # you'd want to include it. You could update the API to return a list of ChatMessages
     # in that case.
     agent: AgentGraph = get_agent(agent_id)
-    kwargs, run_id = await _handle_input(user_input, agent)
+    kwargs, run_id = await _handle_input(user_input, agent, agent_id)
     
     logger.info(f"INVOKE_REQUEST: run_id={run_id}")
     logger.info(f"INVOKE_REQUEST: config_thread_id={kwargs['config']['configurable']['thread_id']}")
@@ -376,7 +390,7 @@ async def message_generator(
     logger.info(f"[STREAM] Start: agent={agent_id}, user={user_input.user_id}, thread={user_input.thread_id[:8] if user_input.thread_id else 'new'}...")
     
     agent: AgentGraph = get_agent(agent_id)
-    kwargs, run_id = await _handle_input(user_input, agent)
+    kwargs, run_id = await _handle_input(user_input, agent, agent_id)
     
     logger.debug(f"Stream run_id: {run_id}")
 
@@ -764,7 +778,7 @@ async def notify_section_update(
         f"then ask me whether to continue to the next step or refine this section."
     )
     user_input = UserInput(message=notify_msg, user_id=user_id, thread_id=thread_id)
-    kwargs, run_id = await _handle_input(user_input, agent)
+    kwargs, run_id = await _handle_input(user_input, agent, agent_id)
 
     # Execute once; ignore content and return minimal success
     try:
