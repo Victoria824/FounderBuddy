@@ -417,11 +417,21 @@ async def message_generator(
                         continue
                     updates = updates or {}
                     
-                    # STREAM_FIX: Skip sending complete messages in updates mode
-                    # We rely on the token streaming (messages mode) instead
-                    # This prevents duplicate historical messages from being sent
+                    # STREAM_FIX: Only send NEW messages (not historical ones)
+                    # Use initial_message_count to filter out messages that were already in the thread
                     update_messages = updates.get("messages", [])
-                    logger.info(f"STREAM_FIX: Skipping {len(update_messages)} messages from updates mode to prevent duplicates")
+                    
+                    # Only add messages that are new (beyond the initial count)
+                    if len(update_messages) > 0:
+                        # If we have an initial count, only take messages after that position
+                        if initial_message_count > 0 and len(update_messages) > initial_message_count:
+                            new_messages.extend(update_messages[initial_message_count:])
+                            logger.info(f"STREAM_FIX: Sending {len(update_messages[initial_message_count:])} new messages (skipping {initial_message_count} historical)")
+                        # If no initial count or this is the first batch, check against sent_message_count
+                        elif len(update_messages) > sent_message_count:
+                            new_messages.extend(update_messages[sent_message_count:])
+                            sent_message_count = len(update_messages)
+                            logger.info(f"STREAM_FIX: Sending {len(new_messages)} new messages")
 
             if stream_mode == "custom":
                 new_messages = [event]
