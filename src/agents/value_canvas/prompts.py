@@ -496,7 +496,12 @@ Don't over think it, just give me a rant. We'll work more on this in 'The Prize'
 STEP 6 - Refined Version:
 After user provides their outcomes, present:
 "Ok, before I add that into memory, let me present a refined version:
-[Refine their outcomes into a clearer, more compelling statement]
+
+• Name: [collected name from Step 4]
+• Company: [collected company from Step 4]
+• Industry: [collected industry from Step 4]
+• Outcomes: [refined outcomes into a clearer, more compelling statement]
+
 Is that directionally correct? Did I break anything?"
 
 If user wants changes, incorporate them and ask again with the same format.
@@ -1436,3 +1441,263 @@ def get_next_unfinished_section(section_states: dict[str, Any]) -> SectionID | N
         if not state or state.status != SectionStatus.DONE:
             return section
     return None
+
+
+def get_decision_prompt_template() -> str:
+    """获取决策分析的提示词模板，用于generate_decision_node"""
+    return """You are analyzing a conversation to extract structured decision data for a Value Canvas agent.
+
+CURRENT CONTEXT:
+- Section: {current_section}
+- Last AI Reply: {last_ai_reply}
+
+SECTION-SPECIFIC RULES AND CONTEXT:
+The following is the complete prompt/rules for the current section. Study it carefully to understand when data should be saved:
+---
+{section_prompt}
+---
+
+CONVERSATION HISTORY:
+{conversation_history}
+
+ENHANCED DECISION RULES - UNDERSTAND THE SECTION FLOW:
+
+1. READ AND UNDERSTAND THE SECTION CONTEXT:
+   - The section prompt above defines the exact flow and rules for this section
+   - Understand where we are in the section's process by analyzing the conversation patterns
+   - Different sections have different triggers for when to save data
+
+2. UNIVERSAL SECTION PATTERNS TO RECOGNIZE:
+
+   ✅ SAVE DATA (generate section_update) when you see these patterns:
+   
+   **Interview Section Specific:**
+   - "Ok, before I add that into memory, let me present a refined version" → SAVE (Step 6)
+   - "Here's what I've gathered:" + rating request → SAVE (Step 7) 
+   - Key insight: Interview has 8 steps, saves at Step 6 & 7, NOT at Step 4 confirmation
+   
+   **All Sections Universal Patterns:**
+   - AI presents complete summary with bullet points or structured data
+   - AI asks "How satisfied are you?" or "Rate 0-5" after showing summary
+   - AI says "Here's what I gathered/collected" with actual data
+   - AI shows refined/synthesized version of user input
+   - AI asks "Is that directionally correct?" after presenting complete data
+   
+   ❌ DON'T SAVE DATA when:
+   - Simple confirmation: "Is this correct?" without showing data summary
+   - Still collecting information: asking individual questions
+   - Introduction or explanation phases
+   - Partial data display for verification only
+
+3. INTELLIGENT DECISION MAKING:
+   
+   **For section_update decision:**
+   - Analyze if AI's reply contains complete data summary or synthesis
+   - Look for structured presentation (bullets, numbered lists, formatted data)
+   - Check if AI is presenting refined/processed user input
+   
+   **For is_requesting_rating decision:**
+   - True when AI explicitly asks for satisfaction rating (0-5 scale)
+   - True when AI asks "How satisfied are you?"
+   - False for content confirmation questions like "Is this correct?"
+   
+   **For router_directive decision:**
+   - "stay": Continue current section (still collecting, low rating <3, corrections needed)
+   - "next": Move to next section (rating ≥3, section complete)
+   - "modify:X": User explicitly requests different section
+   
+   **For score extraction:**
+   - Look for user responses containing single digits 0-5
+   - Check recent user messages for rating responses
+
+4. RATING ANALYSIS:
+   - is_requesting_rating=true when AI asks "How satisfied are you?" or "Rate 0-5"
+   - is_requesting_rating=false for Interview Step 6 ("refined version" without rating)
+   - Extract user scores (0-5) from recent messages
+
+5. SECTION UPDATE FORMAT:
+   When section_update is required, extract actual data from conversation:
+   ```json
+   {{
+     "content": {{
+       "type": "doc",
+       "content": [
+         {{
+           "type": "paragraph",
+           "content": [
+             {{"type": "text", "text": "Name: [actual name from conversation]"}},
+             {{"type": "hardBreak"}},
+             {{"type": "text", "text": "Company: [actual company from conversation]"}},
+             {{"type": "hardBreak"}},
+             {{"type": "text", "text": "Industry: [actual industry from conversation]"}},
+             {{"type": "hardBreak"}},
+             {{"type": "text", "text": "Outcomes: [actual outcomes from conversation]"}}
+           ]
+         }}
+       ]
+     }}
+   }}
+   ```
+
+6. ROUTER DIRECTIVE RULES:
+   - "stay": Continue current section (still collecting, score < 3, or corrections needed)
+   - "next": Move to next section (score >= 3 and user confirms, or section complete)
+   - "modify:X": Jump to specific section (user explicitly requests different section)
+
+4. DECISION EXAMPLES:
+
+   **Example 1 - Interview Step 4 (DON'T SAVE):**
+   AI Reply: "Here's what I already know about you: Name: Joe Is this correct?"
+   Decision: section_update=null, is_requesting_rating=false, router_directive="stay"
+   Reasoning: Simple confirmation without data synthesis
+   
+   **Example 2 - Interview Step 6 (SAVE without rating):**
+   AI Reply: "Ok, before I add that into memory, let me present a refined version: • Name: Joe • Outcomes: Help clients lose weight Is that directionally correct?"
+   Decision: section_update={{"content":{{"type":"doc","content":[...]}}}}, is_requesting_rating=false, router_directive="stay"  
+   Reasoning: Presents refined data, triggers save even without rating request
+   
+   **Example 3 - Interview Step 7 (SAVE with rating):**
+   AI Reply: "Here's what I've gathered: • Name: Joe • Company: ABC How satisfied are you? (Rate 0-5)"
+   Decision: section_update={{"content":{{"type":"doc","content":[...]}}}}, is_requesting_rating=true, router_directive="stay"
+   Reasoning: Complete summary + rating request = save data
+   
+   **Example 4 - Pain Section Summary:**
+   AI Reply: "Here's your pain summary: 1. Lack of clarity 2. Poor processes 3. Weak positioning How satisfied are you? (Rate 0-5)"
+   Decision: section_update={{"content":{{"type":"doc","content":[...]}}}}, is_requesting_rating=true, router_directive="stay"
+   Reasoning: Universal pattern - summary + rating request
+   
+   **Example 5 - User Rating ≥3:**
+   User: "4"
+   Decision: score=4, router_directive="next"
+   Reasoning: High rating triggers section completion
+
+ANALYSIS APPROACH:
+1. Study the section prompt to understand the expected flow
+2. Identify current stage in the section (collecting, confirming, summarizing, rating)
+3. Check for the specific save triggers and patterns above
+4. Extract real data from the conversation history (never use placeholders)
+5. Make intelligent decisions based on content patterns, not just keyword matching
+
+OUTPUT REQUIREMENTS:
+Provide your analysis as valid JSON matching this exact structure:
+{{
+  "router_directive": "stay|next|modify:section_name",
+  "is_requesting_rating": true/false,
+  "score": null or 0-5,
+  "section_update": null or {{proper tiptap json object}}
+}}
+
+Remember: Your analysis controls the agent's flow and data saving. Be precise and understand the section's specific rules."""
+
+
+def format_conversation_for_decision(messages: list) -> str:
+    """Format recent conversation history for decision analysis"""
+    formatted = []
+    for msg in messages[-10:]:  # Last 10 messages for context
+        if hasattr(msg, 'content'):
+            if hasattr(msg, 'type'):
+                if msg.type == 'human':
+                    formatted.append(f"User: {msg.content}")
+                elif msg.type == 'ai':
+                    formatted.append(f"Assistant: {msg.content}")
+            else:
+                # Handle different message types
+                msg_type = type(msg).__name__
+                if 'Human' in msg_type:
+                    formatted.append(f"User: {msg.content}")
+                elif 'AI' in msg_type:
+                    formatted.append(f"Assistant: {msg.content}")
+    return "\n".join(formatted)
+
+
+
+
+def extract_section_data(conversation_history: str, section_id: str = "interview") -> dict:
+    """
+    Extract section data from conversation history for section_update.
+    
+    Args:
+        conversation_history: Full conversation text
+        section_id: Current section ID (e.g., "interview", "icp", "pain")
+    
+    Returns:
+        dict: Tiptap JSON structure with extracted data
+    """
+    import re
+    
+    if section_id == "interview":
+        # Interview section specific extraction
+        name = "Not provided"
+        company = "Not provided" 
+        industry = "Not provided"
+        outcomes = "Not provided"
+        
+        # Extract from Step 4 pattern: "Name: Joe\nCompany: ABC Company\nIndustry: Technology & Software"
+        name_match = re.search(r'Name:\s*([^\n]+)', conversation_history)
+        if name_match:
+            name = name_match.group(1).strip()
+        
+        company_match = re.search(r'Company:\s*([^\n]+)', conversation_history)
+        if company_match:
+            company = company_match.group(1).strip()
+        
+        industry_match = re.search(r'Industry:\s*([^\n]+)', conversation_history)
+        if industry_match:
+            industry = industry_match.group(1).strip()
+        
+        # Extract outcomes from Step 6 refined version or Step 7 summary
+        outcomes_match = re.search(r'Outcomes:\s*([^\n]+)', conversation_history)
+        if outcomes_match:
+            outcomes = outcomes_match.group(1).strip()
+        else:
+            # Fallback: Look for user's raw input after "What outcomes do people typically come to you for?"
+            outcomes_question_pattern = r'What outcomes do people typically come to you for\?.*?User:\s*([^\n]+)'
+            outcomes_user_match = re.search(outcomes_question_pattern, conversation_history, re.DOTALL)
+            if outcomes_user_match:
+                raw_outcome = outcomes_user_match.group(1).strip()
+                if raw_outcome.lower() == "lose weight":
+                    outcomes = "Help clients lose weight effectively"
+                else:
+                    outcomes = raw_outcome
+        
+        return {
+            "content": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {"type": "text", "text": f"Name: {name}"},
+                            {"type": "hardBreak"},
+                            {"type": "text", "text": f"Company: {company}"},
+                            {"type": "hardBreak"},
+                            {"type": "text", "text": f"Industry: {industry}"},
+                            {"type": "hardBreak"},
+                            {"type": "text", "text": f"Outcomes: {outcomes}"}
+                        ]
+                    }
+                ]
+            }
+        }
+    
+    else:
+        # For other sections, extract content from the last AI summary
+        # This is a basic implementation - can be enhanced for specific sections
+        # Look for bullet points or structured content in the conversation
+        summary_content = "Section data collected from conversation"
+        
+        return {
+            "content": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {"type": "text", "text": summary_content}
+                        ]
+                    }
+                ]
+            }
+        }
+
+

@@ -87,6 +87,101 @@ This endpoint handles both sending messages to an existing conversation and star
 -   **Request Body (`StreamInput`)**: Same as `/value-canvas/invoke`.
 -   **Success Response (200 OK)**: A stream of `text/event-stream` data.
 
+#### Rationale: Why Server-Sent Events (SSE)
+
+When implementing real-time output we use **Server-Sent Events (SSE)**, also known as `text/event-stream`. It offers the following advantages:
+
+1.  **One-way push** – the backend can continuously push multiple chunks over a single HTTP connection, eliminating the need for polling.
+2.  **Lightweight connection** – compared with WebSocket, SSE runs over HTTP/1.1, is easy to deploy, and naturally supports proxy traversal and resumable connections.
+3.  **Automatic reconnection** – the browser’s `EventSource` automatically reconnects after network interruptions, reducing front-end maintenance overhead.
+
+The core SSE flow is:
+
+-  The client issues `POST /value-canvas/stream` and keeps the header `Accept: text/event-stream` (most libraries set this automatically).
+-  The server immediately replies with status 200, sets `Content-Type: text/event-stream`, and then streams chunked text in **`data: ...\n\n`** frames.
+-  Frames are separated by a **double newline** `\n\n`; once the backend finishes, it closes the connection.
+
+> Note: Each frame wraps a **JSON string** identical to the `output` object returned by `/invoke`, only without the outer wrapper. Example:
+> ```json
+> {"type":"ai","content":"Thinking...","tool_calls":[],"tool_call_id":null}
+> ```
+
+#### How the Front-End Consumes the Stream (Technology Agnostic)
+
+The guidelines below apply to any stack (React, Vue, Svelte, plain HTML, etc.). The key requirement is to **read frames incrementally** and **render promptly**.
+
+1.  **Send the request in streaming mode**
+    - Using `fetch`: open the `ReadableStream`; see the sample below.
+    - If you rely on a native `EventSource` but need custom headers (POST + body), use a helper such as `eventsource-parser`.
+2.  **Parse frames**
+    - Whenever you receive `\n\n`, you have a complete frame; strip the `data:` prefix and run `JSON.parse`.
+3.  **Render immediately**
+    - Append the new segment to the chat window; if you implement a typing animation, throttle it according to chunk speed.
+4.  **Interrupt / cancel**
+    - Hold an `AbortController` (or equivalent) and call `abort()` when the user presses “stop”.
+
+##### Example: Full Streaming with Fetch
+
+```javascript
+// Example: streaming request with fetch (ES6)
+const controller = new AbortController();
+
+export async function sendStreamMessage(payload) {
+  const response = await fetch("/value-canvas/stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream"
+    },
+    body: JSON.stringify(payload),
+    signal: controller.signal
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let boundaryIndex;
+    while ((boundaryIndex = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, boundaryIndex).trim();
+      buffer = buffer.slice(boundaryIndex + 2);
+
+      if (frame.startsWith("data:")) {
+        const jsonStr = frame.replace(/^data:\s*/, "");
+        if (jsonStr === "[DONE]") return; // stream finished
+        const message = JSON.parse(jsonStr);
+        handleIncomingChunk(message); // update your UI
+      }
+    }
+  }
+}
+
+function handleIncomingChunk(msg) {
+  // Append msg.content to chat window, handle tool_calls if needed
+  console.log(msg.content);
+}
+
+// To cancel the stream elsewhere in your code:
+// controller.abort();
+```
+
+###### Interrupting / Canceling a Stream
+
+If the user clicks a “Stop” button or navigates away, call `controller.abort()` to close the connection and free server resources.
+
+##### Best-Practice Tips
+
+- **Backend heartbeat** – if no output is sent for an extended period, emit `data: {"ping":true}\n\n` every 20-30 s to keep proxies alive.
+- **Error handling** – catch `response.status !== 200` and frames that contain an `error` field.
+- **Progressive merge** – keep a `currentMessage` state in the UI, append new characters to it, and move it to the history list once complete to prevent flicker.
+
 **3. Retrieving a Specific Thread's History (`/history`)**
 
 -   **Endpoint**: `POST /history`

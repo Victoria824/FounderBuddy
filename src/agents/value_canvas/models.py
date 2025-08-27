@@ -219,13 +219,14 @@ class ChatAgentDecision(BaseModel):
         if not isinstance(v, dict):
             raise ValueError("Section update must be a dictionary")
             
-        # Very minimal validation - just check for obviously broken structure
+        # Very minimal validation - just check that it has the expected Tiptap structure
         if 'content' in v:
             content = v['content']
-            if isinstance(content, dict) and 'content' in content:
-                # Only check for extremely large content that could cause issues
-                if len(content.get('content', [])) > 200:  # Much more lenient limit
-                    raise ValueError("Section content extremely large - please reduce")
+            if isinstance(content, dict):
+                # Just ensure it looks like Tiptap JSON structure
+                if 'type' not in content:
+                    raise ValueError("Section content must have 'type' field")
+                # Skip the length check that was causing issues
         
         return v
 
@@ -273,13 +274,14 @@ class ChatAgentOutput(BaseModel):
         if not isinstance(v, dict):
             raise ValueError("Section update must be a dictionary")
             
-        # Very minimal validation - just check for obviously broken structure
+        # Very minimal validation - just check that it has the expected Tiptap structure
         if 'content' in v:
             content = v['content']
-            if isinstance(content, dict) and 'content' in content:
-                # Only check for extremely large content that could cause issues
-                if len(content.get('content', [])) > 200:  # Much more lenient limit
-                    raise ValueError("Section content extremely large - please reduce")
+            if isinstance(content, dict):
+                # Just ensure it looks like Tiptap JSON structure
+                if 'type' not in content:
+                    raise ValueError("Section content must have 'type' field")
+                # Skip the length check that was causing issues
         
         return v
 

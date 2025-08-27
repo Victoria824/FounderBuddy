@@ -386,6 +386,9 @@ async def message_generator(
         async for stream_event in agent.astream(
             **kwargs, stream_mode=["updates", "messages", "custom"]
         ):
+            # [STREAM_DEBUG] Log every raw event from the graph stream
+            logger.info(f"STREAM_DEBUG: Raw Event Received: {repr(stream_event)}")
+
             if not isinstance(stream_event, tuple):
                 continue
             stream_mode, event = stream_event
@@ -416,25 +419,48 @@ async def message_generator(
             for message in new_messages:
                 if isinstance(message, tuple):
                     key, value = message
+                    # DEBUG: Log all tuple events to identify what we're missing
+                    logger.info(f"🔍 TUPLE_EVENT: key='{key}', value_type={type(value).__name__}")
+                    # Skip function calling related tuples - these are internal operations, not user messages
+                    if key in ['tool_calls', 'additional_kwargs', 'invalid_tool_calls']:
+                        logger.info(f"🚫 SKIPPING function call tuple: {key}")
+                        continue
                     # Store parts in temporary dict
+                    logger.info(f"✅ KEEPING tuple: {key}")
                     current_message[key] = value
                 else:
                     # Add complete message if we have one in progress
                     if current_message:
-                        processed_messages.append(_create_ai_message(current_message))
+                        # Only process messages that contain content (user-facing messages)
+                        if 'content' in current_message:
+                            processed_messages.append(_create_ai_message(current_message))
                         current_message = {}
                     processed_messages.append(message)
 
             # Add any remaining message parts
             if current_message:
-                processed_messages.append(_create_ai_message(current_message))
+                # Only process messages that contain content (user-facing messages)
+                if 'content' in current_message:
+                    processed_messages.append(_create_ai_message(current_message))
 
             for message in processed_messages:
+                # TEMP DEBUG: print the raw message structure to diagnose content KeyError
+                logger.info(f"🪵 RAW_MESSAGE: {repr(message)}")
                 try:
+                    # FIX: Skip processing for internal, content-less messages from structured_output calls
+                    if isinstance(message, AIMessage) and not message.content:
+                        if message.tool_calls or message.invalid_tool_calls:
+                            logger.info(f"🚫 SKIPPING internal tool_call message: {repr(message)}")
+                            continue
+
+                    logger.info(f"🔧 CONVERTING message type: {type(message).__name__}")
                     chat_message = langchain_to_chat_message(message)
+                    logger.info(f"✅ CONVERSION SUCCESS for {type(message).__name__}")
                     chat_message.run_id = str(run_id)
                 except Exception as e:
-                    logger.error(f"Error parsing message: {e}")
+                    logger.error(f"❌ CONVERSION FAILED: {e}")
+                    logger.error(f"❌ FAILED MESSAGE TYPE: {type(message).__name__}")
+                    logger.error(f"❌ FAILED MESSAGE CONTENT: {repr(message)}")
                     yield f"data: {json.dumps({'type': 'error', 'content': 'Unexpected error'})}\n\n"
                     continue
                 # LangGraph re-sends the input message, which feels weird, so drop it
@@ -495,6 +521,9 @@ def _create_ai_message(parts: dict) -> AIMessage:
     sig = inspect.signature(AIMessage)
     valid_keys = set(sig.parameters)
     filtered = {k: v for k, v in parts.items() if k in valid_keys}
+    # Ensure content field is always present (AIMessage requires it)
+    if 'content' not in filtered:
+        filtered['content'] = ""
     return AIMessage(**filtered)
 
 
