@@ -1098,7 +1098,8 @@ def build_value_canvas_graph():
         {
             "generate_reply": "generate_reply",
             "implementation": "implementation",
-        }
+            None: END,  # Add this to handle the halt condition
+        },
     )
     
     # New flow: generate_reply -> generate_decision -> memory_updater
