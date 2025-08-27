@@ -382,6 +382,15 @@ async def message_generator(
     logger.info(f"STREAM_REQUEST: run_id={run_id}")
     logger.info(f"STREAM_REQUEST: config_thread_id={kwargs['config']['configurable']['thread_id']}")
 
+    # Get the current thread's message history length to filter out historical messages
+    try:
+        current_state = await agent.aget_state(config=kwargs["config"])
+        initial_message_count = len(current_state.values.get("messages", []))
+        logger.info(f"STREAM_FIX: Initial message count: {initial_message_count}")
+    except Exception as e:
+        logger.warning(f"STREAM_FIX: Could not get initial message count: {e}")
+        initial_message_count = 0
+
     sent_message_count = 0  # Track the number of messages sent to prevent duplicates
 
     try:
@@ -408,11 +417,11 @@ async def message_generator(
                         continue
                     updates = updates or {}
                     
-                    # Only process new messages we haven't sent before
+                    # STREAM_FIX: Skip sending complete messages in updates mode
+                    # We rely on the token streaming (messages mode) instead
+                    # This prevents duplicate historical messages from being sent
                     update_messages = updates.get("messages", [])
-                    if len(update_messages) > sent_message_count:
-                        new_messages.extend(update_messages[sent_message_count:])
-                        sent_message_count = len(update_messages)
+                    logger.info(f"STREAM_FIX: Skipping {len(update_messages)} messages from updates mode to prevent duplicates")
 
             if stream_mode == "custom":
                 new_messages = [event]
