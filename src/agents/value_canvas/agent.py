@@ -13,6 +13,7 @@ from langgraph.prebuilt import ToolNode
 from core.llm import get_model, LLMConfig
 
 from .models import (
+    ChatAgentDecision,
     ChatAgentOutput,
     ContextPacket,
     DeepFearData,
@@ -253,32 +254,70 @@ async def router_node(state: ValueCanvasState, config: RunnableConfig) -> ValueC
     return state
 
 
-async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> ValueCanvasState:
+async def generate_reply_node(state: ValueCanvasState, config: RunnableConfig) -> ValueCanvasState:
     """
-    Chat agent node that handles section-specific conversations.
+    Reply generation node that produces streaming conversational responses.
     
     Responsibilities:
-    - Generate responses based on context_packet system prompt
-    - Validate user input
-    - Generate section content (Tiptap JSON)
-    - Set score and router_directive
-    - Output structured ChatAgentOutput
+    - Generate conversational reply based on context_packet system prompt
+    - Support streaming output token by token
+    - Add reply to conversation history
+    - Update short_memory
     """
-    logger.info(f"Chat agent node - Section: {state['current_section']}")
+    logger.info(f"Generate reply node - Section: {state['current_section']}")
     
     # DEBUG: Log recent message history
     # Create a new context packet for this turn
     context_packet = state.get('context_packet')
     logger.info(
-        f"DEBUG_CHAT_AGENT: Context Packet received: {context_packet}"
+        f"DEBUG_REPLY_NODE: Context Packet received: {context_packet}"
     )
 
-    # Get LLM - no tools for chat agent per design doc
-    # Use centralized configuration
+    # Get LLM - no tools, no structured output for streaming
     llm = get_model()
     
     messages: list[BaseMessage] = []
     last_human_msg: HumanMessage | None = None
+
+    # --- First-turn safeguard for Step 1 duplication in stream mode ---
+    # If the user's first visible message is an affirmative like "yes" but the
+    # canonical Step 1 line hasn't been recorded in the conversation yet,
+    # inject Step 1 into short_memory so that the model proceeds to Step 2
+    # instead of repeating Step 1.
+    try:
+        def _contains_step1(msgs: list[BaseMessage]) -> bool:
+            for _m in msgs or []:
+                if isinstance(_m, AIMessage) and "Let's build your Value Canvas!" in _m.content:
+                    return True
+            return False
+
+        full_history: list[BaseMessage] = state.get("messages", [])
+        short_mem: list[BaseMessage] = state.get("short_memory", [])
+
+        step1_already_present = _contains_step1(full_history) or _contains_step1(short_mem)
+
+        # Detect simple affirmative/negative replies
+        def _is_affirmative(text: str) -> bool:
+            t = (text or "").strip().lower()
+            return t in {"yes", "y", "yep", "yeah", "ok", "okay", "sure"}
+        def _is_negative(text: str) -> bool:
+            t = (text or "").strip().lower()
+            negatives = {
+                "no", "n", "not now", "not ready", "not yet", "later",
+                "nope", "nah"
+            }
+            return any(t == n or t.startswith(n) for n in negatives)
+
+        if not step1_already_present and full_history:
+            last_msg = full_history[-1]
+            if isinstance(last_msg, HumanMessage):
+                if _is_affirmative(last_msg.content) or _is_negative(last_msg.content):
+                    injected = AIMessage(content="Let's build your Value Canvas!\nAre you ready to get started?")
+                    short_mem.append(injected)
+                    state["short_memory"] = short_mem
+                    logger.info("FIRST_TURN_GUARD: Injected Step 1 into short_memory to align with user's immediate yes/no")
+    except Exception as e:
+        logger.warning(f"FIRST_TURN_GUARD: Failed to apply Step 1 safeguard: {e}")
 
     # Check if we should add summary instruction
     # Add summary instruction when:
@@ -289,14 +328,6 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
     current_section = state["current_section"]
     section_state = state.get("section_states", {}).get(current_section.value)
     section_has_content = bool(section_state and section_state.content)
-    
-    # DEBUG: Log detailed section state info
-    
-    # IMPORTANT: Do NOT automatically trigger summary instructions
-    # According to the design document, the Agent should decide when to show summary
-    # based on whether it has collected all required information for the section.
-    # The prompts in prompts.py already contain the logic for when to show summaries.
-    # Forcing summary instructions here causes premature summaries.
     
     # Only add summary reminder if section already has saved content that needs rating
     if section_has_content and not awaiting:
@@ -425,9 +456,15 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         logger.warning(f"Could not determine next section for prompt injection: {e}")
     # --- End of Pre-LLM Context Injection ---
 
+    # Override JSON output requirement with a simple instruction
+    messages.append(SystemMessage(
+        content="OVERRIDE: Generate a natural conversational response. "
+                "Do NOT output JSON format. Just provide your direct reply to the user."
+    ))
+
     try:
         # DEBUG: Log LLM input
-        logger.info("=== LLM_INPUT_DEBUG ===")
+        logger.info("=== LLM_REPLY_INPUT_DEBUG ===")
         logger.info(f"Current section: {state['current_section']}")
         logger.info(f"Total messages count: {len(messages)}")
         logger.info("Last 2 messages:")
@@ -436,11 +473,123 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
             content_preview = msg.content[:200] if hasattr(msg, 'content') else str(msg)[:200]
             logger.info(f"  [{i}] {msg_type}: {content_preview}...")
         
-        # Use LangChain structured output with function calling for better reliability
-        logger.info("🚀 Using LangChain structured output with function calling method")
+        # Use standard LLM for streaming response (no structured output)
+        logger.info("🚀 Generating streaming reply without structured output")
         
-        # Use function calling method which is more reliable than JSON parsing
-        structured_llm = llm.with_structured_output(ChatAgentOutput, method="function_calling")
+        # Generate the reply
+        reply_message = await llm.ainvoke(messages)
+        reply_content = reply_message.content
+
+        # DEBUG: Log the reply content
+        logger.info("=== REPLY_OUTPUT_DEBUG ===")
+        logger.info(f"Raw reply content: {reply_content[:200]}...")
+
+        # Defensive programming: Check if LLM still returned JSON
+        if "```json" in reply_content or reply_content.strip().startswith("{"):
+            logger.info("🔧 Reply contains JSON, attempting to extract reply field")
+            try:
+                import json
+                # Clean markdown code blocks if present
+                cleaned = reply_content.replace("```json", "").replace("```", "").strip()
+                
+                # Try to parse as JSON
+                response_data = json.loads(cleaned)
+                if isinstance(response_data, dict) and "reply" in response_data:
+                    reply_content = response_data["reply"]
+                    logger.info("✅ Successfully extracted reply from JSON output")
+                else:
+                    logger.warning("⚠️ JSON found but no 'reply' field, using raw content")
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ Failed to parse JSON reply: {e}, using raw content")
+            except Exception as e:
+                logger.warning(f"⚠️ Error processing JSON reply: {e}, using raw content")
+
+        # Final reply content
+        logger.info(f"Final reply content: {reply_content[:200]}...")
+
+        # Add AI reply to conversation history
+        state["messages"].append(AIMessage(content=reply_content))
+
+        # Update short-term memory by appending new messages
+        base_mem = state.get("short_memory", [])
+        if last_human_msg is not None:
+            base_mem.append(last_human_msg)
+        base_mem.append(AIMessage(content=reply_content))
+        state["short_memory"] = base_mem
+
+        logger.info(f"DEBUG_REPLY_NODE: Reply generated successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to generate reply: {e}")
+        default_reply = "Sorry, I encountered an error generating my response. Could you rephrase your question?"
+        state["messages"].append(AIMessage(content=default_reply))
+        state.setdefault("short_memory", []).append(AIMessage(content=default_reply))
+    
+    return state
+
+
+
+
+async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig) -> ValueCanvasState:
+    """
+    Decision generation node that analyzes conversation and produces structured decisions.
+    
+    Responsibilities:
+    - Analyze complete conversation including the just-generated reply
+    - Generate structured decision data (router_directive, score, section_update, etc.)
+    - Update state with agent_output containing complete ChatAgentOutput
+    - Set router_directive and other state flags
+    """
+    logger.info(f"Generate decision node - Section: {state['current_section']}")
+    
+    # Get the last AI message (the reply we just generated)
+    messages = state.get("messages", [])
+    if not messages or not isinstance(messages[-1], AIMessage):
+        logger.error("DECISION_NODE: No AI reply found to analyze")
+        # Set a default decision and continue
+        default_decision = ChatAgentDecision(
+            router_directive="stay",
+            is_requesting_rating=False,
+            score=None,
+            section_update=None
+        )
+        # Create agent_output with empty reply
+        state["agent_output"] = ChatAgentOutput(
+            reply="",
+            **default_decision.model_dump()
+        )
+        state["router_directive"] = "stay"
+        return state
+    
+    last_ai_reply = messages[-1].content
+    
+    # Use the modular prompt template from prompts.py
+    from .prompts import get_decision_prompt_template, format_conversation_for_decision
+    
+    # Format conversation history properly
+    conversation_history = format_conversation_for_decision(messages)
+    
+    # Get current section's complete prompt for context
+    current_section_prompt = ""
+    if state.get("context_packet"):
+        current_section_prompt = state["context_packet"].system_prompt
+        logger.info(f"DECISION_NODE: Got section prompt, length: {len(current_section_prompt)}")
+    else:
+        logger.warning("DECISION_NODE: No context_packet available")
+    
+    # Use the template with proper formatting, including section prompt
+    decision_prompt = get_decision_prompt_template().format(
+        current_section=state['current_section'].value,
+        last_ai_reply=last_ai_reply,
+        conversation_history=conversation_history,
+        section_prompt=current_section_prompt
+    )
+
+    try:
+        # All sections now use unified LLM decision generation
+        logger.info("=== CALLING DECISION LLM WITH STRUCTURED OUTPUT ===")
+        llm = get_model()
+        structured_llm = llm.with_structured_output(ChatAgentDecision, method="function_calling")
         
         # Add token limits to prevent infinite generation
         if hasattr(structured_llm, 'bind'):
@@ -449,114 +598,100 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
                 top_p=LLMConfig.DEFAULT_TOP_P
             )
         
-        logger.info("=== CALLING LLM WITH FUNCTION CALLING METHOD ===")
-        llm_output = await structured_llm.ainvoke(messages)
-
-        # DEBUG: Log the COMPLETE LLM output
-        logger.info("=== LLM_OUTPUT_DEBUG ===")
-        logger.info(f"Full reply: {llm_output.reply}")
-        logger.info(f"Router directive: {llm_output.router_directive}")
-        logger.info(f"Is requesting rating: {llm_output.is_requesting_rating}")
-        logger.info(f"Score: {llm_output.score}")
-        logger.info(f"Section update provided: {bool(llm_output.section_update)}")
-        if llm_output.section_update:
-            logger.info(f"Section update content keys: {list(llm_output.section_update.keys())}")
-        else:
-            logger.warning("❌ LLM did NOT provide section_update!")
+        logger.info("DECISION_DEBUG: About to call LLM")
+        decision = await structured_llm.ainvoke(
+            decision_prompt,
+            config={"callbacks": []}  # Disable streaming for this call
+        )
+        logger.info(f"DECISION_DEBUG: LLM returned decision type: {type(decision)}")
+        logger.info(f"DECISION_DEBUG: Decision fields: {decision.__dict__ if hasattr(decision, '__dict__') else decision}")
         
-        if llm_output.section_update:
-            logger.warning(f"AGENT_OUTPUT_DEBUG: Section update generated for section {state['current_section'].value}")
-            # Check if this looks like Interview content being saved to ICP
-            if state['current_section'] == SectionID.ICP:
-                # Check for Interview-specific fields in ICP section update
-                if isinstance(llm_output.section_update, dict) and 'content' in llm_output.section_update:
-                    content_str = str(llm_output.section_update['content'])
-                    if any(term in content_str for term in ["Specialty:", "Proud Achievement:", "Notable Partners:"]):
-                        logger.error("ERROR! ICP section is getting Interview content!")
-            
-            # Additional check for Interview section
-            if state['current_section'] == SectionID.INTERVIEW:
-                # Ensure Interview section saves actual content, not just score
-                if isinstance(llm_output.section_update, dict) and 'content' in llm_output.section_update:
-                    content_str = str(llm_output.section_update['content'])
-                    # Check if it contains actual interview data
-                    if not any(term in content_str for term in ["Name:", "Company:", "Industry:", "Specialty:"]):
-                        logger.warning("WARNING! Interview section_update doesn't contain actual interview data!")
-                        # Check if we're asking for rating without showing summary
-                        if "satisfied" in llm_output.reply.lower() and "summary" in llm_output.reply.lower():
-                            if "Here's what I know about you" not in llm_output.reply:
-                                logger.error("ERROR! Asking for satisfaction rating without showing summary first!")
-
-            # keep original behavior: do not inject the summary into reply here
+        # Validate section_update structure before proceeding
+        if decision.section_update is not None:
+            logger.info(f"DECISION_DEBUG: section_update type: {type(decision.section_update)}")
+            logger.info(f"DECISION_DEBUG: section_update keys: {decision.section_update.keys() if isinstance(decision.section_update, dict) else 'Not a dict'}")
+            if isinstance(decision.section_update, dict) and 'content' in decision.section_update:
+                logger.info("DECISION_DEBUG: section_update has 'content' key")
+            else:
+                logger.warning("DECISION_DEBUG: section_update missing 'content' key! Fixing structure...")
+                # Fix malformed section_update
+                if not isinstance(decision.section_update, dict):
+                    decision.section_update = {"content": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Auto-generated content"}]}]}}
+                elif 'content' not in decision.section_update:
+                    decision.section_update['content'] = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Auto-generated content"}]}]}
+                logger.info("DECISION_DEBUG: Fixed section_update structure")
         
-        # DEBUG: Check state consistency
-        logger.info(f"AGENT_OUTPUT_DEBUG: Current section_states: {list(state.get('section_states', {}).keys())}")
+        logger.info(f"LLM decision analysis completed: {decision}")
 
-        # Create the final agent_output for the state, starting with LLM output
-        agent_output = llm_output
-        
-        # Rely entirely on the LLM for score.
-        # Add a safety rail: if the LLM provides a low score, force a 'stay' directive
-        # to ensure the user can revise the section, overriding any other directive.
-        if agent_output.score is not None and agent_output.score < 3:
-            logger.info(f"Low score ({agent_output.score}) detected from LLM. Forcing 'stay' directive.")
-            agent_output.router_directive = "stay"
+        # DEBUG: Log the decision output
+        logger.info("=== DECISION_OUTPUT_DEBUG ===")
+        logger.info(f"Router directive: {decision.router_directive}")
+        logger.info(f"Is requesting rating: {decision.is_requesting_rating}")
+        logger.info(f"Score: {decision.score}")
+        logger.info(f"Section update provided: {bool(decision.section_update)}")
+        if decision.section_update:
+            logger.info(f"Section update content keys: {list(decision.section_update.keys())}")
 
-        # === SECTION_UPDATE ANALYSIS ===
-        if agent_output.is_requesting_rating and not agent_output.section_update:
-            logger.warning("=== SECTION_UPDATE_ANALYSIS ===")
-            logger.warning("LLM is requesting rating but didn't provide section_update")
-            
-            # Analyze the reply to understand why
-            reply_lower = agent_output.reply.lower()
-            has_summary_keywords = any(keyword in reply_lower for keyword in [
-                "summary", "gathered", "capture", "here's what", "information", 
-                "name:", "company:", "industry:", "specialty:"
-            ])
-            
-            logger.warning(f"Reply contains summary keywords: {has_summary_keywords}")
-            logger.warning(f"Reply length: {len(agent_output.reply)}")
-            logger.warning(f"Current section: {state['current_section']}")
-            
-            if has_summary_keywords:
-                logger.error("🚨 LLM generated summary but FAILED to provide section_update!")
-                logger.error("This indicates a prompt understanding issue or model limitation")
-            
-            logger.warning("Full LLM reply analysis:")
-            logger.warning(f"Reply content: {agent_output.reply}")
-            
-        # Set the is_awaiting_rating flag based on the structured output from the LLM
+        # Create complete ChatAgentOutput by combining reply + decision
+        agent_output = ChatAgentOutput(
+            reply=last_ai_reply,
+            router_directive=decision.router_directive,
+            is_requesting_rating=decision.is_requesting_rating,
+            score=decision.score,
+            section_update=decision.section_update
+        )
+
+        # Enhanced business logic validation
         if agent_output.is_requesting_rating:
             # CRITICAL VALIDATION: If requesting rating, must have section_update
             if not agent_output.section_update:
-                logger.error("CRITICAL ERROR: Model requested rating but provided no section_update!")
-                logger.error("This violates the core system prompt rule and will cause data loss.")
-                logger.error(f"Original agent_output: {agent_output}")
+                logger.warning("⚠️ Model requested rating but provided no section_update - attempting auto-generation")
                 
-                # Force correction to prevent infinite loops
-                agent_output = ChatAgentOutput(
-                    reply=(
-                        "I notice I haven't properly collected all your information yet. "
-                        "Let me continue with the next question. "
-                        "What's your company name? Do you have a website?"
-                    ),
-                    router_directive="stay",
-                    is_requesting_rating=False,
-                    score=None,
-                    section_update=None
-                )
-                logger.info("FORCED CORRECTION: Created new corrected agent output to continue collecting information.")
+                # Check if reply contains summary patterns that should trigger section_update
+                summary_patterns = [
+                    "here's what i gathered", "here's what i've gathered",
+                    "here's your summary", "here's the summary",
+                    "refined version", "•", "bullet",
+                    "name:", "company:", "industry:"
+                ]
+                
+                reply_lower = last_ai_reply.lower()
+                has_summary = any(pattern in reply_lower for pattern in summary_patterns)
+                
+                if has_summary:
+                    logger.info("📝 Summary patterns detected, auto-generating section_update")
+                    # Use the unified section data extraction
+                    from .prompts import extract_section_data
+                    auto_section_update = extract_section_data(conversation_history, state['current_section'].value)
+                    agent_output.section_update = auto_section_update
+                    logger.info("✅ Successfully auto-generated section_update")
+                else:
+                    logger.error("CRITICAL ERROR: Model requested rating but no summary content found!")
+                    logger.error("This violates the core system prompt rule and will cause data loss.")
+                    
+                    # Force correction to prevent infinite loops
+                    agent_output = ChatAgentOutput(
+                        reply=last_ai_reply,
+                        router_directive="stay",
+                        is_requesting_rating=False,
+                        score=None,
+                        section_update=None
+                    )
+                    logger.info("🔧 FORCED CORRECTION: Reset to continue collecting information.")
             
             state["is_awaiting_rating"] = agent_output.is_requesting_rating
             logger.info(f"State updated: is_awaiting_rating set to {agent_output.is_requesting_rating}")
         else:
             state["is_awaiting_rating"] = False
 
+        # Apply score-based safety rail
+        if agent_output.score is not None and agent_output.score < 3:
+            logger.info(f"Low score ({agent_output.score}) detected from decision. Forcing 'stay' directive.")
+            agent_output.router_directive = "stay"
 
-        logger.info(f"DEBUG_CHAT_AGENT: Agent output generated: {agent_output}")
-
-        # Save section_update to a temporary key to be processed by the memory updater
-        state["temp_agent_output"] = agent_output # Store the full agent_output for memory_updater
+        # Save to state
+        state["temp_agent_output"] = agent_output  # For memory_updater
+        state["agent_output"] = agent_output
 
         # Determine router directive based on score, per design doc
         if agent_output.score is not None:
@@ -566,12 +701,9 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
                 calculated_directive = RouterDirective.STAY
                 
             state["router_directive"] = calculated_directive
-            
         else:
             # Fallback to value supplied by model (may be stay/next/modify)
             state["router_directive"] = agent_output.router_directive
-
-        state["agent_output"] = agent_output
 
         # --- MVP Fallback: ensure reply contains clear question -----------------------
         need_question = (
@@ -580,61 +712,39 @@ async def chat_agent_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         )
 
         if need_question:
-            # If reply has neither question mark nor clear instruction words, append prompt
+            # If reply has neither question mark nor clear instruction words, this is handled in reply node
+            import re
             has_question = re.search(r"[?？]", agent_output.reply, re.IGNORECASE)
             has_instruction = any(word in agent_output.reply.lower() for word in [
                 "please", "provide", "describe", "tell", "share", "what", "how", "when", "where", "why"
             ])
             
             if not has_question and not has_instruction:
-                # Only add fallback text when there's really no clear instruction
-                agent_output.reply += (
-                    "\n\nPlease provide your response to continue."
-                )
-
-        # ---------------------------------------------------------------
+                logger.info("DECISION_NODE: Reply lacks clear question/instruction - this should be handled in reply generation")
 
         # If we expect user input next, mark flag (MVP logic uses need_question)
         state["awaiting_user_input"] = need_question
 
-        # Add AI reply to conversation history
-        state["messages"].append(AIMessage(content=agent_output.reply))
-
-        # Update short-term memory by appending new messages
-        base_mem = state.get("short_memory", [])
-        if last_human_msg is not None:
-            base_mem.append(last_human_msg)
-        base_mem.append(AIMessage(content=agent_output.reply))
-        state["short_memory"] = base_mem
-
-        # [DIAGNOSTIC] Log the output from the agent
-        logger.info(f"DEBUG_CHAT_AGENT: Agent output generated: {state.get('agent_output')}")
+        logger.info(f"DEBUG_DECISION_NODE: Decision generated successfully: {agent_output}")
         
-        # [SAVE_SECTION_DEBUG] Track when Chat Agent generates section_update
-        if state.get('agent_output') and state['agent_output'].section_update:
-            logger.info(f"SAVE_SECTION_DEBUG: ✅ Chat Agent DID generate section_update for section {state['current_section']}")
-            logger.debug(f"SAVE_SECTION_DEBUG: Section update content type: {type(state['agent_output'].section_update)}")
-        else:
-            logger.info(f"SAVE_SECTION_DEBUG: ❌ Chat Agent did NOT generate section_update for section {state['current_section']}")
-            if state.get('agent_output'):
-                logger.debug(f"SAVE_SECTION_DEBUG: Agent output exists but section_update is: {state['agent_output'].section_update}")
-            else:
-                logger.debug("SAVE_SECTION_DEBUG: No agent output exists at all")
-
     except Exception as e:
-        logger.error(f"Failed to get structured output from LLM: {e}")
-        default_output = ChatAgentOutput(
-            reply="Sorry, I encountered a formatting error. Could you rephrase?",
+        logger.error(f"Failed to get structured decision from LLM: {e}")
+        default_decision = ChatAgentDecision(
             router_directive="stay",
+            is_requesting_rating=False,
             score=None,
             section_update=None,
         )
-        state["agent_output"] = default_output
+        agent_output = ChatAgentOutput(
+            reply=last_ai_reply,
+            **default_decision.model_dump()
+        )
+        state["agent_output"] = agent_output
         state["router_directive"] = "stay"
-        state["messages"].append(AIMessage(content=default_output.reply))
         state["awaiting_user_input"] = True
-        state.setdefault("short_memory", []).append(AIMessage(content=default_output.reply))
+
     return state
+
 
 
 async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -> ValueCanvasState:
@@ -949,7 +1059,7 @@ async def implementation_node(state: ValueCanvasState, config: RunnableConfig) -
 
 
 
-def route_decision(state: ValueCanvasState) -> Literal["implementation", "chat_agent", "halt"]:
+def route_decision(state: ValueCanvasState) -> Literal["implementation", "generate_reply"] | None:
     """Determine the next node to go to based on current state."""
     # 1. All sections complete → Implementation
     if state.get("finished", False):
@@ -971,16 +1081,16 @@ def route_decision(state: ValueCanvasState) -> Literal["implementation", "chat_a
     
     # 2. STAY directive - continue on current section
     if directive == RouterDirective.STAY or (isinstance(directive, str) and directive.lower() == "stay"):
-        # If the user has replied since last AI message, forward to Chat Agent.
+        # If the user has replied since last AI message, forward to Reply Generation.
         if has_pending_user_input():
-            return "chat_agent"
+            return "generate_reply"
 
         # If AI is still waiting for user response, halt and wait for next run (prevent repeated questions).
         if state.get("awaiting_user_input", False):
-            return "halt"
+            return None  # Halt execution, wait for user input
 
         # Otherwise, halt directly (typically when just initialized).
-        return "halt"
+        return None  # Halt execution
     
     # 3. NEXT/MODIFY directive - section transition  
     elif directive == RouterDirective.NEXT or (isinstance(directive, str) and directive.startswith("modify:")):
@@ -988,31 +1098,32 @@ def route_decision(state: ValueCanvasState) -> Literal["implementation", "chat_a
         # and then ask the first question for the new section
         
         # If there's a pending user input, it means user has acknowledged the transition
-        # Let router process the directive and then go to chat_agent for new section
+        # Let router process the directive and then go to generate_reply for new section
         if has_pending_user_input():
-            return "chat_agent"
+            return "generate_reply"
         
-        # If Chat Agent just set NEXT directive but user hasn't responded yet, halt and wait
+        # If Generate Decision just set NEXT directive but user hasn't responded yet, halt and wait
         msgs = state.get("messages", [])
         if msgs and isinstance(msgs[-1], AIMessage):
-            return "halt"
+            return None  # Halt execution, wait for user input
         
-        # Default case - go to chat_agent to ask first question of current section
-        return "chat_agent"
+        # Default case - go to generate_reply to ask first question of current section
+        return "generate_reply"
     
     # 4. Default case - halt to prevent infinite loops
-    return "halt"
+    return None  # Halt execution
 
 
 # Build the graph
 def build_value_canvas_graph():
-    """Build the Value Canvas agent graph."""
+    """Build the Value Canvas agent graph with streaming reply generation."""
     graph = StateGraph(ValueCanvasState)
     
     # Add nodes
     graph.add_node("initialize", initialize_node)
     graph.add_node("router", router_node)
-    graph.add_node("chat_agent", chat_agent_node)
+    graph.add_node("generate_reply", generate_reply_node)
+    graph.add_node("generate_decision", generate_decision_node)
     graph.add_node("memory_updater", memory_updater_node)
     graph.add_node("implementation", implementation_node)
     
@@ -1020,19 +1131,20 @@ def build_value_canvas_graph():
     graph.add_edge(START, "initialize")
     graph.add_edge("initialize", "router")
     
-    # Router can go to chat agent or implementation
+    # Router can go to reply generation or implementation
     graph.add_conditional_edges(
         "router",
         route_decision,
         {
-            "chat_agent": "chat_agent",
+            "generate_reply": "generate_reply",
             "implementation": "implementation",
-            "halt": END,
-        }
+            None: END,  # Add this to handle the halt condition
+        },
     )
     
-    # Chat agent has no tools, goes directly to memory_updater
-    graph.add_edge("chat_agent", "memory_updater")
+    # New flow: generate_reply -> generate_decision -> memory_updater
+    graph.add_edge("generate_reply", "generate_decision")
+    graph.add_edge("generate_decision", "memory_updater")
     
     # Memory updater goes back to router
     graph.add_edge("memory_updater", "router")
@@ -1092,14 +1204,6 @@ async def initialize_value_canvas_state(user_id: int = None, thread_id: str = No
     })
     
     initial_state["context_packet"] = ContextPacket(**context)
-    
-    # Add welcome message
-    welcome_msg = AIMessage(
-        content="Welcome! I'm here to help you create your Value Canvas - "
-        "a powerful framework that will transform your marketing messaging. "
-        "Let's start by getting to know you and your business better."
-    )
-    initial_state["messages"].append(welcome_msg)
     
     return initial_state
 
