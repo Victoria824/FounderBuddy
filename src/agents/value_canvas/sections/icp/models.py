@@ -4,14 +4,12 @@ from pydantic import BaseModel, Field
 
 
 class ICPData(BaseModel):
-    """Structured data for the Ideal Client Persona (ICP) section, based on the new structured template."""
-    role_identity: str | None = Field(None, description="The primary role or identity of the ICP (e.g., 'Founder', 'Stay at home mum').")
-    context_scale: str | None = Field(None, description="The scale or context of their role (e.g., 'fast growth tech companies', 'Family of 4').")
-    industry_sector: str | None = Field(None, description="The industry or sector they operate in.")
-    gender: str | None = Field(None, description="The gender of the ICP.")
-    age_range: str | None = Field(None, description="The typical age range of the ICP (e.g., '35-50').")
-    income_level: str | None = Field(None, description="Income, budget level, or company revenue.")
-    country_region: str | None = Field(None, description="The country or region where the ICP is based.")
-    location_setting: str | None = Field(None, description="The typical living or working setting (e.g., 'urban', 'suburban', 'rural').")
-    primary_interests: str | None = Field(None, description="Primary interests or values of the ICP.")
-    lifestyle_indicators: list[str] = Field(default_factory=list, description="Specific lifestyle indicators that show their values (e.g., 'Drives a luxury european car', 'Plays golf').")
+    """Structured data for the Ideal Client Persona (ICP) section, matching the 8 required fields from prompts."""
+    icp_nickname: str | None = Field(None, description="A compelling 2-4 word nickname based on their role/situation.")
+    icp_role_identity: str | None = Field(None, description="Their primary role or life situation.")
+    icp_context_scale: str | None = Field(None, description="What describes their situation size/scope (company size, team size, funding, etc.).")
+    icp_industry_sector_context: str | None = Field(None, description="The industry/sector they work in AND a key insight about that sector.")
+    icp_demographics: str | None = Field(None, description="Gender, age range, income/budget level, geographic location.")
+    icp_interests: str | None = Field(None, description="3 specific interests (primary, secondary, tertiary).")
+    icp_values: str | None = Field(None, description="2 lifestyle indicators that show their values.")
+    icp_golden_insight: str | None = Field(None, description="A profound insight about their buying motivations.")

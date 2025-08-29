@@ -12,4 +12,7 @@ class Principle(BaseModel):
 class SignatureMethodData(BaseModel):
     """Structured data for the Signature Method section."""
     method_name: str | None = Field(None, description="A memorable name for the method (2-4 words).")
-    principles: list[Principle] = Field(description="A list of 4-6 core principles that form the method.", max_length=6)
+    sequenced_principles: list[str] | None = Field(None, description="Ordered list of principle names.", max_length=6)
+    principle_descriptions: dict[str, str] | None = Field(None, description="Descriptions for each principle, keyed by principle name.")
+    # Keep original structure for compatibility
+    principles: list[Principle] = Field(default_factory=list, description="Optional list structure for backward compatibility.", max_length=6)
