@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.pregel import Pregel
 
-from agents.value_canvas.agent import graph as value_canvas_agent
-from agents.social_pitch.agent import graph as social_pitch_agent
+from .value_canvas.agent import graph as value_canvas_agent
+from .social_pitch.agent import graph as social_pitch_agent
 from schema import AgentInfo
 
 DEFAULT_AGENT = "value-canvas"

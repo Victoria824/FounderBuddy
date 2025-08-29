@@ -1,6 +1,5 @@
-'''Pydantic models for Value Canvas Agent.'''
+'''Pydantic models for Value Canvas Agent - Compatibility layer after refactoring.'''
 
-from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 import uuid
@@ -9,37 +8,26 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field, field_validator
 
+# Import enums and base models
+from .enums import SectionStatus, RouterDirective, SectionID
+from .sections.base_prompt import ValidationRule, SectionTemplate
 
-class SectionStatus(str, Enum):
-    """Status of a Value Canvas section."""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    DONE = "done"
+# Import section-specific models
+from .sections.interview import InterviewData
+from .sections.icp import ICPData
+from .sections.pain import PainData, PainPoint
+from .sections.deep_fear import DeepFearData
+from .sections.payoffs import PayoffsData, PayoffPoint
+from .sections.signature_method import SignatureMethodData, Principle
+from .sections.mistakes import MistakesData, Mistake
+from .sections.prize import PrizeData
+from .sections.implementation import ImplementationData
 
 
-class RouterDirective(str, Enum):
-    """Router directive for navigation control."""
-    STAY = "stay"
-    NEXT = "next"
-    MODIFY = "modify"  # Format: "modify:section_id"
 
 
-class SectionID(str, Enum):
-    """Value Canvas section identifiers."""
-    # Initial Interview
-    INTERVIEW = "interview"
 
-    # Core Value Canvas Sections (7 total according to document)
-    ICP = "icp"  # Ideal Customer Persona
-    PAIN = "pain"  # The Pain (contains 3 pain points)
-    DEEP_FEAR = "deep_fear"  # The Deep Fear
-    PAYOFFS = "payoffs"  # The Payoffs (contains 3 payoff points)
-    SIGNATURE_METHOD = "signature_method"  # Signature Method
-    MISTAKES = "mistakes"  # The Mistakes
-    PRIZE = "prize"  # The Prize
 
-    # Implementation/Export
-    IMPLEMENTATION = "implementation"
 
 
 class TiptapTextNode(BaseModel):
@@ -316,136 +304,47 @@ class ValueCanvasState(MessagesState):
     last_error: str | None = None
 
 
-class ValidationRule(BaseModel):
-    """Validation rule for field input."""
-    field_name: str
-    rule_type: Literal["min_length", "max_length", "regex", "required", "choices"]
-    value: Any
-    error_message: str
-
-
-class SectionTemplate(BaseModel):
-    """Template for a Value Canvas section."""
-    section_id: SectionID
-    name: str
-    description: str
-    system_prompt_template: str
-    validation_rules: list[ValidationRule] = Field(default_factory=list)
-    required_fields: list[str] = Field(default_factory=list)
-    next_section: SectionID | None = None
 
 
 # --- Structured Output Models for Data Extraction ---
+# These are now imported from their respective section modules at the top of this file
+# The imports provide backward compatibility for existing code
 
-class InterviewData(BaseModel):
-    """A data structure to hold extracted information from the user interview."""
-    
-    client_name: str | None = Field(
-        None, 
-        description="The user's full name. Exclude any mention of a preferred name."
-    )
-    preferred_name: str | None = Field(
-        None, 
-        description="The user's preferred name or nickname, often found in parentheses."
-    )
-    company_name: str | None = Field(
-        None, 
-        description="The name of the user's company."
-    )
-    industry: str | None = Field(
-        None, 
-        description="The industry the user works in."
-    )
-    specialty: str | None = Field(
-        None, 
-        description="The user's specialty or 'zone of genius'."
-    )
-    career_highlight: str | None = Field(
-        None, 
-        description="A career achievement the user is proud of."
-    )
-    client_outcomes: str | None = Field(
-        None, 
-        description="The typical results or outcomes clients get from working with the user."
-    )
-    specialized_skills: str | None = Field(
-        None, 
-        description="Specific skills or qualifications the user mentioned."
-    )
-
-
-class ICPData(BaseModel):
-    """Structured data for the Ideal Client Persona (ICP) section, based on the new structured template."""
-    role_identity: str | None = Field(None, description="The primary role or identity of the ICP (e.g., 'Founder', 'Stay at home mum').")
-    context_scale: str | None = Field(None, description="The scale or context of their role (e.g., 'fast growth tech companies', 'Family of 4').")
-    industry_sector: str | None = Field(None, description="The industry or sector they operate in.")
-    gender: str | None = Field(None, description="The gender of the ICP.")
-    age_range: str | None = Field(None, description="The typical age range of the ICP (e.g., '35-50').")
-    income_level: str | None = Field(None, description="Income, budget level, or company revenue.")
-    country_region: str | None = Field(None, description="The country or region where the ICP is based.")
-    location_setting: str | None = Field(None, description="The typical living or working setting (e.g., 'urban', 'suburban', 'rural').")
-    primary_interests: str | None = Field(None, description="Primary interests or values of the ICP.")
-    lifestyle_indicators: list[str] = Field(default_factory=list, description="Specific lifestyle indicators that show their values (e.g., 'Drives a luxury european car', 'Plays golf').")
-
-
-class PainPoint(BaseModel):
-    """Structured data for a single pain point."""
-    symptom: str | None = Field(None, description="The observable problem or symptom of the pain (1-3 words).")
-    struggle: str | None = Field(None, description="How this pain shows up in their daily work life (1-2 sentences).")
-    cost: str | None = Field(None, description="The immediate, tangible cost of this pain.")
-    consequence: str | None = Field(None, description="The long-term, future consequence if this pain is not solved.")
-
-
-class PainData(BaseModel):
-    """Structured data for the Pain section, containing three distinct pain points."""
-    pain_points: list[PainPoint] = Field(description="A list of three distinct pain points.", max_length=3)
-
-
-class DeepFearData(BaseModel):
-    """Structured data for the Deep Fear section."""
-    deep_fear: str | None = Field(None, description="The private doubt or self-question the client has that they rarely voice.")
-    golden_insight: str | None = Field(None, description="A surprising truth about the ICP's deepest motivation that they may not have realized.")
-
-
-class PayoffPoint(BaseModel):
-    """Structured data for a single payoff point."""
-    objective: str | None = Field(None, description="What the client wants to achieve (1-3 words).")
-    desire: str | None = Field(None, description="A description of what the client specifically wants (1-2 sentences).")
-    without: str | None = Field(None, description="A statement that pre-handles common objections or concerns.")
-    resolution: str | None = Field(None, description="A statement that directly resolves the corresponding pain symptom.")
-
-
-class PayoffsData(BaseModel):
-    """Structured data for the Payoffs section, containing three distinct payoff points."""
-    payoffs: list[PayoffPoint] = Field(description="A list of three distinct payoff points that mirror the pain points.", max_length=3)
-
-
-class Principle(BaseModel):
-    """A single principle within the Signature Method."""
-    name: str | None = Field(None, description="The name of the principle (2-4 words).")
-    description: str | None = Field(None, description="A brief description of what the principle means in practice (1-2 sentences).")
-
-
-class SignatureMethodData(BaseModel):
-    """Structured data for the Signature Method section."""
-    method_name: str | None = Field(None, description="A memorable name for the method (2-4 words).")
-    principles: list[Principle] = Field(description="A list of 4-6 core principles that form the method.", max_length=6)
-
-
-class Mistake(BaseModel):
-    """Structured data for a single mistake."""
-    related_to: str = Field(description="The pain point or method principle this mistake is related to.")
-    root_cause: str | None = Field(None, description="The non-obvious reason this mistake keeps happening.")
-    error_in_thinking: str | None = Field(None, description="The flawed belief that makes the problem worse.")
-    error_in_action: str | None = Field(None, description="What they do that feels right but creates more problems.")
-
-
-class MistakesData(BaseModel):
-    """Structured data for the Mistakes section."""
-    mistakes: list[Mistake] = Field(description="A list of mistakes related to pain points and method principles.", max_length=10)
-
-
-class PrizeData(BaseModel):
-    """Structured data for the Prize section."""
-    category: str | None = Field(None, description="The category of the prize (e.g., Identity-Based, Outcome-Based).")
-    statement: str | None = Field(None, description="The 1-5 word prize statement.") 
+# Export all imported models for backward compatibility
+__all__ = [
+    # Core enums and classes
+    "SectionStatus",
+    "RouterDirective",
+    "SectionID",
+    # Tiptap models
+    "TiptapTextNode",
+    "TiptapHardBreakNode",
+    "TiptapInlineNode",
+    "TiptapParagraphNode",
+    "TiptapNode",
+    "TiptapDocument",
+    # Section models
+    "SectionContent",
+    "SectionState",
+    "ContextPacket",
+    "ValueCanvasData",
+    "ChatAgentDecision",
+    "ChatAgentOutput",
+    "ValueCanvasState",
+    "ValidationRule",
+    "SectionTemplate",
+    # Section-specific data models (imported from sections)
+    "InterviewData",
+    "ICPData",
+    "PainData",
+    "PainPoint",
+    "DeepFearData",
+    "PayoffsData",
+    "PayoffPoint",
+    "SignatureMethodData",
+    "Principle",
+    "MistakesData",
+    "Mistake",
+    "PrizeData",
+    "ImplementationData",
+] 
