@@ -4,7 +4,8 @@
     "graphs": {
         "value_canvas": "agents.value_canvas.agent:graph",
         "social_pitch": "agents.social_pitch.agent:graph",
-        "mission_pitch": "agents.mission_pitch.agent:graph"
+        "mission_pitch": "agents.mission_pitch.agent:graph",
+        "special_report": "agents.special_report.agent:graph"
     },
     "env": "./.env"
 }

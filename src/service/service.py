@@ -29,10 +29,12 @@ from agents.value_canvas.agent import initialize_value_canvas_state
 from agents.mission_pitch.agent import initialize_mission_pitch_state
 from agents.social_pitch.agent import initialize_social_pitch_state
 from agents.signature_pitch.agent import initialize_signature_pitch_state
+from agents.special_report.agent import initialize_special_report_state
 from agents.value_canvas.prompts import SECTION_TEMPLATES as VALUE_CANVAS_TEMPLATES
 from agents.mission_pitch.prompts import SECTION_TEMPLATES as MISSION_PITCH_TEMPLATES
 from agents.social_pitch.prompts import SECTION_TEMPLATES as SOCIAL_PITCH_TEMPLATES
 from agents.signature_pitch.prompts import SECTION_TEMPLATES as SIGNATURE_PITCH_TEMPLATES
+from agents.special_report.prompts import SECTION_TEMPLATES as SPECIAL_REPORT_TEMPLATES
 from core import settings
 from integrations.dentapp.dentapp_utils import SECTION_ID_MAPPING
 from memory import initialize_database, initialize_store
@@ -235,6 +237,8 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph, agent_id: str)
             initial_state = await initialize_social_pitch_state(user_id=user_id)
         elif agent_id == "signature-pitch":
             initial_state = await initialize_signature_pitch_state(user_id=user_id)
+        elif agent_id == "special-report":
+            initial_state = await initialize_special_report_state(user_id=user_id)
         else:
             raise ValueError(f"Unknown agent: {agent_id}")
         
@@ -358,6 +362,8 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> Invoke
                 section_templates = SOCIAL_PITCH_TEMPLATES
             elif agent_id == "signature-pitch":
                 section_templates = SIGNATURE_PITCH_TEMPLATES
+            elif agent_id == "special-report":
+                section_templates = SPECIAL_REPORT_TEMPLATES
             else:  # default to value_canvas
                 section_templates = VALUE_CANVAS_TEMPLATES
             
@@ -643,6 +649,8 @@ async def message_generator(
                     section_templates = SOCIAL_PITCH_TEMPLATES
                 elif agent_id == "signature-pitch":
                     section_templates = SIGNATURE_PITCH_TEMPLATES
+                elif agent_id == "special-report":
+                    section_templates = SPECIAL_REPORT_TEMPLATES
                 else:  # default to value_canvas
                     section_templates = VALUE_CANVAS_TEMPLATES
                 

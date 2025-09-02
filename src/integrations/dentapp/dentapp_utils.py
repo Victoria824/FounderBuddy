@@ -24,6 +24,7 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
         # Social Pitch: section IDs 17-22, agent ID 3
         # Mission Pitch: section IDs 23-31, agent ID 4
         # Signature Pitch: section IDs 32-39, agent ID 5
+        # Special Report: section IDs 40-43, agent ID 6
         section_mapping = {
             # Value Canvas sections
             "interview": 9,
@@ -56,6 +57,11 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
             "core_credibility": 35,
             "story_spark": 36,
             "signature_line": 37,
+            # Special Report sections
+            "topic_selection": 40,
+            "content_development": 41,
+            "report_structure": 42,
+            "sr_implementation": 43,  # Special Report implementation
         }
         agent_id = 2  # Default to Value Canvas agent ID (will be overridden by agent-specific calls)
         logger.info("Using GSD configuration: Value Canvas (IDs 9-16, agent 2), Social Pitch (IDs 17-22, agent 3), Mission Pitch (IDs 23-31, agent 4), Signature Pitch (IDs 32-39, agent 5)")
@@ -65,6 +71,7 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
         # Social Pitch: section IDs 9-14, agent ID 3
         # Mission Pitch: section IDs 15-23, agent ID 4
         # Signature Pitch: section IDs 24-31, agent ID 5
+        # Special Report: section IDs 32-35, agent ID 6
         section_mapping = {
             # Value Canvas sections
             "interview": 1,
@@ -97,6 +104,11 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
             "core_credibility": 27,
             "story_spark": 28,
             "signature_line": 29,
+            # Special Report sections
+            "topic_selection": 32,
+            "content_development": 33,
+            "report_structure": 34,
+            "sr_implementation": 35,  # Special Report implementation
         }
         agent_id = 1  # Default to Value Canvas agent ID (will be overridden by agent-specific calls)
         logger.info("Using DentApp AI Builder configuration: Value Canvas (IDs 1-8, agent 1), Social Pitch (IDs 9-14, agent 3), Mission Pitch (IDs 15-23, agent 4), Signature Pitch (IDs 24-31, agent 5)")
@@ -134,6 +146,11 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
             "core_credibility": 35,
             "story_spark": 36,
             "signature_line": 37,
+            # Special Report sections
+            "topic_selection": 40,
+            "content_development": 41,
+            "report_structure": 42,
+            "sr_implementation": 43,  # Special Report implementation
         }
         agent_id = 2  # Default to Value Canvas agent ID
         logger.warning(f"Unknown DENTAPP_API_URL: {dentapp_api_url}, using default GSD configuration")
@@ -149,6 +166,7 @@ VALUE_CANVAS_AGENT_ID = 2  # GSD environment
 SOCIAL_PITCH_AGENT_ID = 3
 MISSION_PITCH_AGENT_ID = 4
 SIGNATURE_PITCH_AGENT_ID = 5
+SPECIAL_REPORT_AGENT_ID = 6
 
 # Adjust agent IDs based on environment
 dentapp_api_url = os.getenv("DENTAPP_API_URL", "")
@@ -158,6 +176,7 @@ if "dentappaibuilder.enspirittech.co.uk" in dentapp_api_url:
     SOCIAL_PITCH_AGENT_ID = 3
     MISSION_PITCH_AGENT_ID = 4
     SIGNATURE_PITCH_AGENT_ID = 5
+    SPECIAL_REPORT_AGENT_ID = 6
 
 
 def get_agent_id_for_section(section_id_str: str, agent_context: str = None) -> int:
@@ -180,6 +199,8 @@ def get_agent_id_for_section(section_id_str: str, agent_context: str = None) -> 
         return MISSION_PITCH_AGENT_ID
     elif agent_context == "signature_pitch":
         return SIGNATURE_PITCH_AGENT_ID
+    elif agent_context == "special_report":
+        return SPECIAL_REPORT_AGENT_ID
     
     # Value Canvas exclusive sections
     value_canvas_sections = {
@@ -204,6 +225,11 @@ def get_agent_id_for_section(section_id_str: str, agent_context: str = None) -> 
         "core_credibility", "story_spark", "signature_line"
     }
     
+    # Special Report exclusive sections
+    special_report_sections = {
+        "topic_selection", "content_development", "report_structure", "sr_implementation"
+    }
+    
     # Handle special cases
     if section_id_str == "sp_pain":
         return SOCIAL_PITCH_AGENT_ID
@@ -218,6 +244,8 @@ def get_agent_id_for_section(section_id_str: str, agent_context: str = None) -> 
         return MISSION_PITCH_AGENT_ID
     elif section_id_str in signature_pitch_sections:
         return SIGNATURE_PITCH_AGENT_ID
+    elif section_id_str in special_report_sections:
+        return SPECIAL_REPORT_AGENT_ID
     else:
         logger.warning(f"Unknown section type: {section_id_str}, defaulting to Value Canvas agent")
         return VALUE_CANVAS_AGENT_ID

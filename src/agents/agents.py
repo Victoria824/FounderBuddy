@@ -7,6 +7,7 @@ from .value_canvas.agent import graph as value_canvas_agent
 from .social_pitch.agent import graph as social_pitch_agent
 from .mission_pitch.agent import graph as mission_pitch_agent
 from .signature_pitch.agent import graph as signature_pitch_agent
+from .special_report.agent import graph as special_report_agent
 from schema import AgentInfo
 
 DEFAULT_AGENT = "value-canvas"
@@ -39,6 +40,10 @@ agents: dict[str, Agent] = {
     "signature-pitch": Agent(
         description="A Signature Pitch creation agent that helps entrepreneurs craft magnetic 90-second pitches rooted in psychology and storytelling",
         graph=signature_pitch_agent,
+    ),
+    "special-report": Agent(
+        description="A Special Report creation agent that guides users through building comprehensive business reports and analysis",
+        graph=special_report_agent,
     ),
 }
 
