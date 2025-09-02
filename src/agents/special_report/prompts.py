@@ -649,7 +649,7 @@ def get_next_section(current: SpecialReportSection) -> SpecialReportSection | No
 
 
 def get_next_unfinished_section(section_states: dict[str, Any]) -> SpecialReportSection | None:
-    """Find the next section that should be worked on based on sequential progression."""
+    """Find the next section that hasn't been completed."""
     import logging
     logger = logging.getLogger(__name__)
     
@@ -662,22 +662,12 @@ def get_next_unfinished_section(section_states: dict[str, Any]) -> SpecialReport
         status = state.status if state else "NOT_STARTED"
         logger.info(f"  {i}: {section.value} = {status}")
     
-    # Find the last CONSECUTIVELY completed section
-    last_completed_index = -1
-    for i, section in enumerate(order):
+    # Simple progression: find first unfinished section
+    for section in order:
         state = section_states.get(section.value)
-        if state and state.status == SectionStatus.DONE:
-            last_completed_index = i
-        else:
-            # Stop at first non-completed section - don't skip ahead
-            break
-    
-    # Return the NEXT section after the last completed one
-    next_index = last_completed_index + 1
-    if next_index < len(order):
-        next_section = order[next_index]
-        logger.info(f"Next unfinished section: {next_section.value} (index {next_index})")
-        return next_section
+        if not state or state.status != SectionStatus.DONE:
+            logger.info(f"Next unfinished section: {section.value}")
+            return section
     
     logger.info("All sections completed - no next section")
     return None

@@ -210,6 +210,9 @@ class SpecialReportState(MessagesState):
     # Error tracking
     error_count: int = 0
     last_error: str | None = None
+    
+    # Safety mechanism for stuck states
+    consecutive_stays: int = 0
 
 
 class ValidationRule(BaseModel):
@@ -253,4 +256,33 @@ class ReportStructureData(BaseModel):
     section_summaries: dict[str, str] | None = Field(None, description="Summary of each 7-step section")
     key_transitions: list[str] | None = Field(None, description="Important section transitions", max_length=6)
     call_to_action: str | None = Field(None, description="Final CTA and next step")
+    estimated_word_count: int | None = Field(None, description="Estimated total word count")
+
+
+# Structured Output Models for Data Extraction
+
+class TopicSelectionExtractedData(BaseModel):
+    """Extracted data for Topic Selection section."""
+    selected_headline: str | None = Field(None, description="Final headline choice")
+    subtitle: str | None = Field(None, description="Supporting subtitle")
+    topic_rationale: str | None = Field(None, description="Why this topic works for their ICP")
+    transformation_promise: str | None = Field(None, description="What transformation this promises")
+
+class ContentDevelopmentExtractedData(BaseModel):
+    """Extracted data for Content Development section."""
+    thinking_style_focus: str | None = Field(None, description="Primary thinking style for this client")
+    key_stories: list[str] | None = Field(None, description="Selected stories for report", max_length=5)
+    main_framework: str | None = Field(None, description="Primary visual framework to use")
+    proof_elements: list[str] | None = Field(None, description="Validation elements selected", max_length=5)
+    action_steps: list[str] | None = Field(None, description="Immediate actions for readers", max_length=5)
+
+class ReportStructureExtractedData(BaseModel):
+    """Extracted data for Report Structure section.""" 
+    attract_content: str | None = Field(None, description="Attract section content")
+    disrupt_content: str | None = Field(None, description="Disrupt section content")
+    inform_content: str | None = Field(None, description="Inform section content")
+    recommend_content: str | None = Field(None, description="Recommend section content")
+    overcome_content: str | None = Field(None, description="Overcome section content")
+    reinforce_content: str | None = Field(None, description="Reinforce section content")
+    invite_content: str | None = Field(None, description="Invite section content")
     estimated_word_count: int | None = Field(None, description="Estimated total word count")

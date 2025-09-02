@@ -94,6 +94,8 @@ async def initialize_node(state: SpecialReportState, config: RunnableConfig) -> 
         state["is_awaiting_rating"] = False
     if "messages" not in state:
         state["messages"] = []
+    if "consecutive_stays" not in state:
+        state["consecutive_stays"] = 0
     
     logger.info(f"Initialize complete - User: {state['user_id']}, Thread: {state['thread_id']}")
     return state
@@ -271,6 +273,38 @@ async def chat_agent_node(state: SpecialReportState, config: RunnableConfig) -> 
             messages.append({"role": "user", "content": _last_msg.content})
             last_human_msg = _last_msg
 
+    # --- Pre-LLM Context Injection ---
+    # To prevent the LLM from hallucinating the next section's name, we calculate it
+    # programmatically and provide it as a direct instruction.
+    try:
+        from .prompts import SECTION_TEMPLATES, get_next_unfinished_section
+        
+        temp_states = state.get("section_states", {}).copy()
+        current_section_id = state["current_section"].value
+        
+        if current_section_id not in temp_states:
+            temp_states[current_section_id] = SectionState(
+                section_id=SpecialReportSection(current_section_id),
+                status=SectionStatus.DONE
+            )
+        else:
+            # Assume the current section will be completed in this turn for prediction
+            temp_states[current_section_id].status = SectionStatus.DONE
+
+        next_section = get_next_unfinished_section(temp_states)
+        
+        if next_section:
+            next_section_name = SECTION_TEMPLATES.get(next_section.value).name
+            instructional_prompt = (
+                f"SYSTEM INSTRUCTION: The next section is '{next_section_name}'. "
+                "If the user confirms to proceed, you MUST use this exact name in your transition message."
+            )
+            messages.append({"role": "system", "content": instructional_prompt})
+            logger.info(f"Injected next section name into context: '{next_section_name}'")
+    except Exception as e:
+        logger.warning(f"Could not determine next section for prompt injection: {e}")
+    # --- End of Pre-LLM Context Injection ---
+
     try:
         # Use LangChain structured output with function calling for better reliability
         logger.info("🚀 Using LangChain structured output with function calling method")
@@ -373,14 +407,14 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
     if agent_out:
         logger.debug(f"DATABASE_DEBUG: Agent output - section_update: {bool(agent_out.section_update)}, score: {agent_out.score}, router_directive: {agent_out.router_directive}")
 
-    # CRITICAL FIX: Use enum status values, not strings
+    # CRITICAL FIX: Use string status values to match working agents
     def _status_from_output(score, directive):
-        """Return status enum to match SectionState model."""
+        """Return status *string* to align with get_next_unfinished_section() logic."""
         if directive == RouterDirective.NEXT:
-            return SectionStatus.DONE        # Returns enum, not string
+            return SectionStatus.DONE.value        # Returns string, not enum
         if score is not None and score >= 3:
-            return SectionStatus.DONE
-        return SectionStatus.IN_PROGRESS
+            return SectionStatus.DONE.value
+        return SectionStatus.IN_PROGRESS.value
 
     if agent_out and agent_out.section_update:
         section_id = state["current_section"].value
@@ -398,7 +432,7 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
             "section_id": section_id,
             "content": agent_out.section_update['content'] if isinstance(agent_out.section_update, dict) else agent_out.section_update,
             "score": agent_out.score,
-            "status": computed_status.value,  # Convert enum to string for database
+            "status": computed_status,  # Already a string from _status_from_output
         })
         logger.debug(f"DATABASE_DEBUG: save_section returned: {bool(save_result)}")
         
@@ -417,13 +451,213 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
                 plain_text=None
             ),
             score=agent_out.score,
-            status=computed_status,  # Use enum directly
+            status=computed_status,  # Now a string from _status_from_output
         )
 
         logger.info(f"DATABASE_DEBUG: ✅ Section {section_id} updated with structured content")
+        
+        # Extract structured data and update canvas_data using LLM
+        try:
+            await extract_and_update_canvas_data(state, section_id, agent_out.section_update)
+        except Exception as e:
+            logger.warning(f"DATABASE_DEBUG: Failed to extract structured data (non-critical): {e}")
+        
+    # Handle cases where agent provides score/status but no structured section_update  
+    elif agent_out:
+        # BRANCH 2: Process agent output without section_update (when LLM provides score but no content)
+        logger.info("SAVE_SECTION_DEBUG: ✅ ENTERING BRANCH 2: Processing agent output without section_update")
+        logger.info("DATABASE_DEBUG: Processing agent output without section_update (likely score/status only)")
+        
+        if state.get("context_packet"):
+            score_section_id = state["context_packet"].section_id.value
+            logger.debug(f"DATABASE_DEBUG: Processing score/status update for section {score_section_id}")
+
+            # Only proceed if there's a score to save.
+            if agent_out.score is None:
+                logger.info(f"DATABASE_DEBUG: No score or section_update for {score_section_id}, skipping save.")
+                return state
+
+            # We have a score, so we MUST save. We need to find the content.
+            content_to_save = None
+
+            # 1. Try to find content in the current state for the section
+            if score_section_id in state.get("section_states", {}) and state["section_states"][score_section_id].content:
+                logger.info(f"SAVE_SECTION_DEBUG: Found content for section {score_section_id} in state.")
+                # The content in state should now be the correct Tiptap document
+                content_to_save = state["section_states"][score_section_id].content.content.model_dump()
+            
+            # 2. If not in state, recover from previous message history with improved logic
+            if not content_to_save:
+                logger.warning(f"SAVE_SECTION_DEBUG: Content for {score_section_id} not in state, recovering from history.")
+                messages = state.get("messages", [])
+                summary_text = None
+                # Search backwards through the message history to find the last summary message.
+                for msg in reversed(messages):
+                    if isinstance(msg, AIMessage):
+                        # A summary message typically contains these keywords.
+                        content_lower = msg.content.lower()
+                        if "summary" in content_lower and ("satisfied" in content_lower or "rate 0-5" in content_lower):
+                            summary_text = msg.content
+                            logger.info("SAVE_SECTION_DEBUG: Found candidate summary message in history.")
+                            break
+                
+                if summary_text:
+                    logger.info("SAVE_SECTION_DEBUG: Recovered summary text, converting to Tiptap format.")
+                    try:
+                        content_to_save = await create_tiptap_content.ainvoke({"text": summary_text})
+                    except Exception as e:
+                        logger.error(f"SAVE_SECTION_DEBUG: Failed to convert summary to Tiptap: {e}")
+                else:
+                    logger.error(f"SAVE_SECTION_DEBUG: Could not recover summary from message history for {score_section_id}.")
+
+            # 3. If we found content (either from state or recovery), proceed with saving.
+            if content_to_save:
+                computed_status = _status_from_output(agent_out.score, agent_out.router_directive)
+                logger.info(f"SAVE_SECTION_DEBUG: ✅ Calling save_section for {score_section_id} with score and content.")
+                
+                try:
+                    await save_section.ainvoke({
+                        "user_id": state["user_id"],
+                        "thread_id": state["thread_id"],
+                        "section_id": score_section_id,
+                        "content": content_to_save,
+                        "score": agent_out.score,
+                        "status": computed_status,
+                    })
+                except Exception as e:
+                    logger.warning(f"DATABASE_DEBUG: save_section failed (expected if DB not configured): {e}")
+
+                # Update local state consistently, whether it existed before or not.
+                # Convert content_to_save to TiptapDocument
+                if isinstance(content_to_save, dict):
+                    tiptap_doc = TiptapDocument.model_validate(content_to_save)
+                else:
+                    tiptap_doc = content_to_save
+                
+                state.setdefault("section_states", {})[score_section_id] = SectionState(
+                    section_id=SpecialReportSection(score_section_id),
+                    content=SectionContent(
+                        content=tiptap_doc,
+                        plain_text=None
+                    ),
+                    score=agent_out.score,
+                    status=computed_status,
+                )
+                logger.info(f"DATABASE_DEBUG: ✅ Updated/created section state for {score_section_id} with score {agent_out.score}")
+            else:
+                # 4. If content recovery failed, we must not call save_section with empty content.
+                logger.error(f"DATABASE_DEBUG: ❌ CRITICAL: Aborting save for section {score_section_id} due to missing content.")
+
+        else:
+            logger.warning("DATABASE_DEBUG: ⚠️ Cannot update section state as context_packet is missing")
+
+    else:
+        # No agent output at all - safety mechanism for stuck states
+        logger.info("SAVE_SECTION_DEBUG: ❌ No agent_out - applying safety mechanism")
+        
+        # Safety mechanism: if we're stuck in stay mode without progress, force next
+        if state.get("router_directive") == "stay":
+            consecutive_stays = state.get("consecutive_stays", 0) + 1
+            state["consecutive_stays"] = consecutive_stays
+            
+            if consecutive_stays >= 3:  # After 3 stays without progress, force next
+                logger.warning("Memory updater node - Forcing next due to no progress after multiple stays")
+                state["router_directive"] = "next" 
+                state["consecutive_stays"] = 0
+
+    # [SAVE_SECTION_DEBUG] Final decision summary
+    if not agent_out:
+        logger.info("SAVE_SECTION_DEBUG: ❌ FINAL RESULT: No agent_out - save_section was NEVER called")
+    elif agent_out.section_update:
+        logger.info("SAVE_SECTION_DEBUG: ✅ FINAL RESULT: Had section_update - save_section was called in BRANCH 1")
+    elif agent_out:
+        logger.info("SAVE_SECTION_DEBUG: ✅ FINAL RESULT: Had agent_out but no section_update - save_section was called in BRANCH 2 (if conditions met)")
+    else:
+        logger.info("SAVE_SECTION_DEBUG: ❌ FINAL RESULT: Unknown state - save_section may not have been called")
 
     logger.info("=== DATABASE_DEBUG: memory_updater_node() EXIT ===")
     return state
+
+
+async def extract_and_update_canvas_data(
+    state: SpecialReportState, 
+    section_id: str, 
+    section_update: dict
+) -> None:
+    """Extract structured data from section content and update canvas_data."""
+    logger.info(f"Extracting structured data for section: {section_id}")
+    
+    # Get plain text from tiptap content
+    plain_text = await extract_plain_text.ainvoke({"tiptap_json": section_update['content']})
+    
+    # Extract data based on section type
+    llm = get_model()
+    
+    try:
+        if section_id == SpecialReportSection.TOPIC_SELECTION.value:
+            from .models import TopicSelectionExtractedData
+            structured_llm = llm.with_structured_output(TopicSelectionExtractedData)
+            extracted_data = await structured_llm.ainvoke([
+                {"role": "system", "content": f"Extract topic selection data from this content: {plain_text}"}
+            ])
+            
+            # Update canvas_data with extracted fields
+            canvas_data = state["canvas_data"]
+            if extracted_data.selected_headline:
+                canvas_data.topic_data.selected_topic = extracted_data.selected_headline
+            if extracted_data.subtitle:
+                canvas_data.topic_data.subtitle = extracted_data.subtitle
+            if extracted_data.topic_rationale:
+                # Store in the topic_confirmed field as a boolean based on rationale presence
+                canvas_data.topic_data.topic_confirmed = bool(extracted_data.topic_rationale)
+                
+        elif section_id == SpecialReportSection.CONTENT_DEVELOPMENT.value:
+            from .models import ContentDevelopmentExtractedData
+            structured_llm = llm.with_structured_output(ContentDevelopmentExtractedData)
+            extracted_data = await structured_llm.ainvoke([
+                {"role": "system", "content": f"Extract content development data from this content: {plain_text}"}
+            ])
+            
+            canvas_data = state["canvas_data"]
+            if extracted_data.key_stories:
+                canvas_data.content_data.personal_stories = extracted_data.key_stories[:5]
+            if extracted_data.main_framework:
+                canvas_data.content_data.visual_frameworks = [extracted_data.main_framework]
+            if extracted_data.proof_elements:
+                canvas_data.content_data.proof_points = extracted_data.proof_elements[:10]
+            if extracted_data.action_steps:
+                canvas_data.content_data.immediate_actions = extracted_data.action_steps[:10]
+                
+        elif section_id == SpecialReportSection.REPORT_STRUCTURE.value:
+            from .models import ReportStructureExtractedData
+            structured_llm = llm.with_structured_output(ReportStructureExtractedData)
+            extracted_data = await structured_llm.ainvoke([
+                {"role": "system", "content": f"Extract report structure data from this content: {plain_text}"}
+            ])
+            
+            canvas_data = state["canvas_data"]
+            if extracted_data.attract_content:
+                canvas_data.report_structure.attract_content = extracted_data.attract_content
+            if extracted_data.disrupt_content:
+                canvas_data.report_structure.disrupt_content = extracted_data.disrupt_content
+            if extracted_data.inform_content:
+                canvas_data.report_structure.inform_content = extracted_data.inform_content
+            if extracted_data.recommend_content:
+                canvas_data.report_structure.recommend_content = extracted_data.recommend_content
+            if extracted_data.overcome_content:
+                canvas_data.report_structure.overcome_content = extracted_data.overcome_content
+            if extracted_data.reinforce_content:
+                canvas_data.report_structure.reinforce_content = extracted_data.reinforce_content
+            if extracted_data.invite_content:
+                canvas_data.report_structure.invite_content = extracted_data.invite_content
+            if extracted_data.estimated_word_count:
+                canvas_data.word_count = extracted_data.estimated_word_count
+        
+        logger.info(f"Successfully extracted and updated canvas data for section: {section_id}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to extract structured data for section {section_id}: {e}")
+        # Continue without structured extraction - the content is still saved
 
 
 async def implementation_node(state: SpecialReportState, config: RunnableConfig) -> SpecialReportState:
