@@ -15,9 +15,11 @@ from .sections.base_prompt import ValidationRule, SectionTemplate
 # Import section-specific models
 from .sections.interview import InterviewData
 from .sections.icp import ICPData
+from .sections.icp_stress_test import ICPStressTestData
 from .sections.pain import PainData, PainPoint
 from .sections.deep_fear import DeepFearData
 from .sections.payoffs import PayoffsData, PayoffPoint
+from .sections.pain_payoff_symmetry import PainPayoffSymmetryData
 from .sections.signature_method import SignatureMethodData, Principle
 from .sections.mistakes import MistakesData, Mistake
 from .sections.prize import PrizeData
@@ -116,6 +118,17 @@ class ValueCanvasData(BaseModel):
     icp_values: str | None = None  # VALUES section content (both lifestyle indicators)
     icp_golden_insight: str | None = None  # GOLDEN INSIGHT section content
 
+    # ICP Stress Test data
+    icp_stress_test_can_influence: int | None = None
+    icp_stress_test_like_working: int | None = None
+    icp_stress_test_afford_premium: int | None = None
+    icp_stress_test_decision_maker: int | None = None
+    icp_stress_test_significant_transformation: int | None = None
+    icp_stress_test_total_score: int | None = None
+    icp_stress_test_passed: bool | None = None
+    icp_stress_test_golden_insight: str | None = None
+    icp_stress_test_refinements: str | None = None
+
     # Pain points (3)
     pain1_symptom: str | None = None
     pain1_struggle: str | None = None
@@ -151,6 +164,15 @@ class ValueCanvasData(BaseModel):
     payoff3_desire: str | None = None
     payoff3_without: str | None = None
     payoff3_resolution: str | None = None
+
+    # Pain-Payoff Symmetry insights
+    pain_payoff_golden_insight_1: str | None = None
+    pain_payoff_golden_insight_2: str | None = None
+    pain_payoff_golden_insight_3: str | None = None
+    pain_payoff_golden_insight_4: str | None = None
+    pain_payoff_golden_insight_5: str | None = None
+    pain_payoff_insights_presented: bool | None = None
+    pain_payoff_user_ready: bool | None = None
 
     # Signature Method
     method_name: str | None = None

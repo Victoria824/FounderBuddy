@@ -54,9 +54,11 @@ def get_section_order() -> list[SectionID]:
     return [
         SectionID.INTERVIEW,
         SectionID.ICP,
+        SectionID.ICP_STRESS_TEST,
         SectionID.PAIN,
         SectionID.DEEP_FEAR,
         SectionID.PAYOFFS,
+        SectionID.PAIN_PAYOFF_SYMMETRY,
         SectionID.SIGNATURE_METHOD,
         SectionID.MISTAKES,
         SectionID.PRIZE,
@@ -110,13 +112,34 @@ ENHANCED DECISION RULES - UNDERSTAND THE SECTION FLOW:
    - Understand where we are in the section's process by analyzing the conversation patterns
    - Different sections have different triggers for when to save data
 
-2. UNIVERSAL SECTION PATTERNS TO RECOGNIZE:
+2. 🔍 SECTION COMPLETENESS VERIFICATION:
+   
+   **CRITICAL: Before deciding to save data or move sections, verify ALL required fields are collected:**
+   
+   - Check the section's required_fields list in the prompt
+   - For Pain section: Must have pain1_symptom, pain1_struggle, pain1_cost, pain1_consequence, 
+     pain2_symptom, pain2_struggle, pain2_cost, pain2_consequence,
+     pain3_symptom, pain3_struggle, pain3_cost, pain3_consequence (12 fields total)
+   - For ICP section: Must have all ICP fields defined in the prompt
+   - For Interview section: Must complete all 7 steps before saving
+   
+   **If ANY required field is missing:**
+   - router_directive MUST be "stay"
+   - section_update should be null
+   - AI should continue collecting missing information
+
+3. UNIVERSAL SECTION PATTERNS TO RECOGNIZE:
 
    ✅ SAVE DATA (generate section_update) when you see these patterns:
    
    **Interview Section Specific:**
    - "Ok, before I add that into memory, let me present a refined version:" + rating request → SAVE (Step 6) 
    - Key insight: Interview has 7 steps, saves at Step 6, NOT at Step 4 confirmation
+   
+   **Pain Section Specific:**
+   - ALL 3 pain points fully collected (4 elements each)
+   - AI presents synthesized summary of all pain points
+   - AI asks for satisfaction rating AFTER showing complete summary
    
    **All Sections Universal Patterns:**
    - AI presents complete summary with bullet points or structured data
@@ -130,11 +153,13 @@ ENHANCED DECISION RULES - UNDERSTAND THE SECTION FLOW:
    - Still collecting information: asking individual questions
    - Introduction or explanation phases
    - Partial data display for verification only
+   - ANY required fields are missing
 
-3. INTELLIGENT DECISION MAKING:
+4. INTELLIGENT DECISION MAKING:
    
    **For section_update decision:**
    - Analyze if AI's reply contains complete data summary or synthesis
+   - Verify ALL required fields have been collected
    - Look for structured presentation (bullets, numbered lists, formatted data)
    - Check if AI is presenting refined/processed user input
    
@@ -144,9 +169,16 @@ ENHANCED DECISION RULES - UNDERSTAND THE SECTION FLOW:
    - False for content confirmation questions like "Is this correct?"
    
    **For router_directive decision:**
-   - "stay": Continue current section (still collecting, user not satisfied, corrections needed)
-   - "next": Move to next section (user satisfied, section complete)
+   - "stay": Continue current section (still collecting, user not satisfied, corrections needed, or MISSING REQUIRED FIELDS)
+   - "next": Move to next section (user satisfied AND all required fields collected)
    - "modify:X": User explicitly requests different section
+
+5. ⚠️ DEVIATION DETECTION:
+   
+   If the AI appears to be providing advice or solutions instead of collecting Value Canvas data:
+   - router_directive: "stay"
+   - section_update: null
+   - The AI should be redirected back to the collection task
 
 CRITICAL: You must output valid JSON with the ChatAgentDecision structure."""
 

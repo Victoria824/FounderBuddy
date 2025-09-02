@@ -248,8 +248,8 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
         logger.info("SAVE_SECTION_DEBUG: ✅ ENTERING BRANCH 2: Processing agent output without section_update")
         logger.info("DATABASE_DEBUG: Processing agent output without section_update (likely satisfaction feedback/status only)")
         
-        if state.get("context_packet"):
-            score_section_id = state["context_packet"].section_id.value
+        if state.get("current_section"):
+            score_section_id = state["current_section"].value
             logger.debug(f"DATABASE_DEBUG: Processing satisfaction feedback/status update for section {score_section_id}")
 
             # Only proceed if there's satisfaction feedback to save OR router directive is NEXT.
@@ -321,8 +321,27 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 )
                 logger.info(f"DATABASE_DEBUG: ✅ Updated/created section state for {score_section_id} with satisfaction feedback {agent_out.is_satisfied}")
             else:
-                # 4. If content recovery failed, we must not call save_section with empty content.
-                logger.error(f"DATABASE_DEBUG: ❌ CRITICAL: Aborting save for section {score_section_id} due to missing content.")
+                # 4. If content recovery failed, check if we should still update status
+                if agent_out.router_directive == RouterDirective.NEXT:
+                    # User wants to proceed, mark section as DONE even without content
+                    logger.warning(f"DATABASE_DEBUG: No content found for {score_section_id}, but router_directive is NEXT. Marking as DONE.")
+                    
+                    computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
+                    
+                    # Create minimal section state with DONE status
+                    state.setdefault("section_states", {})[score_section_id] = SectionState(
+                        section_id=SectionID(score_section_id),
+                        content=SectionContent(
+                            content=TiptapDocument(type="doc", content=[]),  # Empty content
+                            plain_text=None
+                        ),
+                        satisfaction_feedback=agent_out.user_satisfaction_feedback,
+                        status=computed_status,  # Will be DONE because of router_directive == NEXT
+                    )
+                    logger.info(f"DATABASE_DEBUG: ✅ Marked section {score_section_id} as DONE without content (router_directive was NEXT)")
+                else:
+                    # Not moving next and no content, cannot update
+                    logger.error(f"DATABASE_DEBUG: ❌ CRITICAL: Aborting save for section {score_section_id} due to missing content.")
 
         else:
             logger.warning("DATABASE_DEBUG: ⚠️ Cannot update section state as context_packet is missing")

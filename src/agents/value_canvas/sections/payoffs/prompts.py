@@ -313,7 +313,7 @@ PAYOFFS_TEMPLATE = SectionTemplate(
         "payoff2_objective", "payoff2_desire", "payoff2_without", "payoff2_resolution",
         "payoff3_objective", "payoff3_desire", "payoff3_without", "payoff3_resolution"
     ],
-    next_section=SectionID.SIGNATURE_METHOD,
+    next_section=SectionID.PAIN_PAYOFF_SYMMETRY,
 )
 
 # Additional Payoffs prompts

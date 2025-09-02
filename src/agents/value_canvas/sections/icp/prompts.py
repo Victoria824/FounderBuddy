@@ -227,7 +227,7 @@ ICP_TEMPLATE = SectionTemplate(
         "icp_values",
         "icp_golden_insight"
     ],
-    next_section=SectionID.PAIN,
+    next_section=SectionID.ICP_STRESS_TEST,
 )
 
 # Additional ICP prompts

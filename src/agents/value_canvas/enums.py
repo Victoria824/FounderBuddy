@@ -24,9 +24,11 @@ class SectionID(str, Enum):
     
     # Core Value Canvas Sections
     ICP = "icp"  # Ideal Customer Persona
+    ICP_STRESS_TEST = "icp_stress_test"  # ICP Stress Test
     PAIN = "pain"  # The Pain (contains 3 pain points)
     DEEP_FEAR = "deep_fear"  # The Deep Fear
     PAYOFFS = "payoffs"  # The Payoffs (contains 3 payoff points)
+    PAIN_PAYOFF_SYMMETRY = "pain_payoff_symmetry"  # Pain-Payoff Symmetry Analysis
     SIGNATURE_METHOD = "signature_method"  # Signature Method
     MISTAKES = "mistakes"  # The Mistakes
     PRIZE = "prize"  # The Prize

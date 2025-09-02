@@ -74,10 +74,43 @@ async def get_context(
     import re
     def _replace_placeholder(match):
         key = match.group(1)
-        return str(canvas_data.get(key, "")) if isinstance(canvas_data, dict) else ""
+        value = canvas_data.get(key, "") if isinstance(canvas_data, dict) else ""
+        
+        # Special handling for Pain section progress indicators
+        if section_id == "pain" and key.startswith("pain") and key.endswith("_symptom"):
+            # Check if we have conditional logic in the template
+            if " if " in match.group(0):
+                # This is a conditional placeholder, let it handle itself
+                return match.group(0)
+        
+        if not value:
+            logger.debug(f"Template placeholder '{{{{{key}}}}}' not found in canvas_data, replacing with empty string")
+        return str(value)
 
-    # Only replace simple placeholders like {identifier}, keep other braces unchanged
-    section_prompt = re.sub(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", _replace_placeholder, section_prompt)
+    # First pass: Replace simple placeholders like {{identifier}}
+    section_prompt = re.sub(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}", _replace_placeholder, section_prompt)
+    
+    # Second pass: Handle conditional placeholders for Pain section
+    # These are in format: {{pain1_symptom if pain1_symptom else "Not yet collected"}}
+    if section_id == "pain":
+        def _replace_conditional(match):
+            full_expr = match.group(1)
+            # Parse the conditional expression
+            if " if " in full_expr and " else " in full_expr:
+                parts = full_expr.split(" if ")
+                if len(parts) == 2:
+                    var_part = parts[0].strip()
+                    condition_else = parts[1].split(" else ")
+                    if len(condition_else) == 2:
+                        var_name = condition_else[0].strip()
+                        else_value = condition_else[1].strip().strip('"').strip("'")
+                        # Get the value from canvas_data
+                        value = canvas_data.get(var_name, "")
+                        return str(value) if value else else_value
+            return match.group(0)
+        
+        # Replace conditional placeholders
+        section_prompt = re.sub(r"\{\{([^}]+)\}\}", _replace_conditional, section_prompt)
     
     system_prompt = f"{base_prompt}\\n\\n---\\n\\n{section_prompt}"
     
