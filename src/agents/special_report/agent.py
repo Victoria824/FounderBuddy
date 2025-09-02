@@ -410,11 +410,13 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
     # CRITICAL FIX: Use string status values to match working agents
     def _status_from_output(score, directive):
         """Return status *string* to align with get_next_unfinished_section() logic."""
+        # Follow EXACT documentation pattern from troubleshooting guide
         if directive == RouterDirective.NEXT:
             return SectionStatus.DONE.value        # Returns string, not enum
         if score is not None and score >= 3:
             return SectionStatus.DONE.value
         return SectionStatus.IN_PROGRESS.value
+
 
     if agent_out and agent_out.section_update:
         section_id = state["current_section"].value
@@ -426,15 +428,19 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
         computed_status = _status_from_output(agent_out.score, agent_out.router_directive)
         logger.info(f"DATABASE_DEBUG: Computed status: {computed_status} (type: {type(computed_status)})")
         
-        save_result = await save_section.ainvoke({
-            "user_id": state["user_id"],
-            "thread_id": state["thread_id"],
-            "section_id": section_id,
-            "content": agent_out.section_update['content'] if isinstance(agent_out.section_update, dict) else agent_out.section_update,
-            "score": agent_out.score,
-            "status": computed_status,  # Already a string from _status_from_output
-        })
-        logger.debug(f"DATABASE_DEBUG: save_section returned: {bool(save_result)}")
+        try:
+            save_result = await save_section.ainvoke({
+                "user_id": state["user_id"],
+                "thread_id": state["thread_id"],
+                "section_id": section_id,
+                "content": agent_out.section_update['content'] if isinstance(agent_out.section_update, dict) else agent_out.section_update,
+                "score": agent_out.score,
+                "status": computed_status,  # Already a string from _status_from_output
+            })
+            logger.debug(f"DATABASE_DEBUG: save_section returned: {bool(save_result)}")
+        except Exception as e:
+            logger.warning(f"DATABASE_DEBUG: save_section failed (expected if DB not configured): {e}")
+            # Continue with local state management even if database save fails
         
         # Update local state
         logger.debug("DATABASE_DEBUG: Updating local section_states with new content")
@@ -461,6 +467,9 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
             await extract_and_update_canvas_data(state, section_id, agent_out.section_update)
         except Exception as e:
             logger.warning(f"DATABASE_DEBUG: Failed to extract structured data (non-critical): {e}")
+        
+        # Reset consecutive stays counter since we made progress
+        state["consecutive_stays"] = 0
         
     # Handle cases where agent provides score/status but no structured section_update  
     elif agent_out:
@@ -493,7 +502,7 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
                 summary_text = None
                 # Search backwards through the message history to find the last summary message.
                 for msg in reversed(messages):
-                    if isinstance(msg, AIMessage):
+                    if hasattr(msg, 'content') and msg.content:
                         # A summary message typically contains these keywords.
                         content_lower = msg.content.lower()
                         if "summary" in content_lower and ("satisfied" in content_lower or "rate 0-5" in content_lower):
@@ -526,15 +535,16 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
                     })
                 except Exception as e:
                     logger.warning(f"DATABASE_DEBUG: save_section failed (expected if DB not configured): {e}")
-
+                
                 # Update local state consistently, whether it existed before or not.
                 # Convert content_to_save to TiptapDocument
                 if isinstance(content_to_save, dict):
                     tiptap_doc = TiptapDocument.model_validate(content_to_save)
                 else:
-                    tiptap_doc = content_to_save
-                
-                state.setdefault("section_states", {})[score_section_id] = SectionState(
+                    logger.error(f"SAVE_SECTION_DEBUG: Invalid content_to_save type: {type(content_to_save)}")
+                    tiptap_doc = TiptapDocument(type="doc", content=[])
+
+                state["section_states"][score_section_id] = SectionState(
                     section_id=SpecialReportSection(score_section_id),
                     content=SectionContent(
                         content=tiptap_doc,
@@ -543,11 +553,10 @@ async def memory_updater_node(state: SpecialReportState, config: RunnableConfig)
                     score=agent_out.score,
                     status=computed_status,
                 )
-                logger.info(f"DATABASE_DEBUG: ✅ Updated/created section state for {score_section_id} with score {agent_out.score}")
+                logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 2 COMPLETED: Section {score_section_id} saved with recovered content and score")
             else:
-                # 4. If content recovery failed, we must not call save_section with empty content.
-                logger.error(f"DATABASE_DEBUG: ❌ CRITICAL: Aborting save for section {score_section_id} due to missing content.")
-
+                logger.warning(f"SAVE_SECTION_DEBUG: Could not find or recover content for {score_section_id} - score not saved")
+                return state
         else:
             logger.warning("DATABASE_DEBUG: ⚠️ Cannot update section state as context_packet is missing")
 
