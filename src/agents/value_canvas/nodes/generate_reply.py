@@ -38,45 +38,8 @@ async def generate_reply_node(state: ValueCanvasState, config: RunnableConfig) -
     messages: list[BaseMessage] = []
     last_human_msg: HumanMessage | None = None
 
-    # --- First-turn safeguard for Step 1 duplication in stream mode ---
-    # If the user's first visible message is an affirmative like "yes" but the
-    # canonical Step 1 line hasn't been recorded in the conversation yet,
-    # inject Step 1 into short_memory so that the model proceeds to Step 2
-    # instead of repeating Step 1.
-    try:
-        def _contains_step1(msgs: list[BaseMessage]) -> bool:
-            for _m in msgs or []:
-                if isinstance(_m, AIMessage) and "Let's build your Value Canvas!" in _m.content:
-                    return True
-            return False
-
-        full_history: list[BaseMessage] = state.get("messages", [])
-        short_mem: list[BaseMessage] = state.get("short_memory", [])
-
-        step1_already_present = _contains_step1(full_history) or _contains_step1(short_mem)
-
-        # Detect simple affirmative/negative replies
-        def _is_affirmative(text: str) -> bool:
-            t = (text or "").strip().lower()
-            return t in {"yes", "y", "yep", "yeah", "ok", "okay", "sure"}
-        def _is_negative(text: str) -> bool:
-            t = (text or "").strip().lower()
-            negatives = {
-                "no", "n", "not now", "not ready", "not yet", "later",
-                "nope", "nah"
-            }
-            return any(t == n or t.startswith(n) for n in negatives)
-
-        if not step1_already_present and full_history:
-            last_msg = full_history[-1]
-            if isinstance(last_msg, HumanMessage):
-                if _is_affirmative(last_msg.content) or _is_negative(last_msg.content):
-                    injected = AIMessage(content="Let's build your Value Canvas!\nAre you ready to get started?")
-                    short_mem.append(injected)
-                    state["short_memory"] = short_mem
-                    logger.info("FIRST_TURN_GUARD: Injected Step 1 into short_memory to align with user's immediate yes/no")
-    except Exception as e:
-        logger.warning(f"FIRST_TURN_GUARD: Failed to apply Step 1 safeguard: {e}")
+    # FIRST_TURN_GUARD removed - Let LLM handle conversation flow intelligently
+    # based on section-specific prompt instructions
 
     # Check if we should add summary instruction
     # Add summary instruction when:

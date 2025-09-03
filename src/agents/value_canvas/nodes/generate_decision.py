@@ -53,8 +53,19 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
     # Use the modular prompt template from prompts.py
     from ..prompts import get_decision_prompt_template, format_conversation_for_decision
     
+    # DEBUG: Log conversation messages before formatting
+    logger.info("=== DECISION_NODE_CONVERSATION_HISTORY_DEBUG ===")
+    logger.info(f"Messages received: {len(messages)}")
+    for i, msg in enumerate(messages):
+        msg_type = type(msg).__name__
+        content_preview = msg.content[:150] if hasattr(msg, 'content') else str(msg)[:150]
+        logger.info(f"  [{i}] {msg_type}: {content_preview}...")
+    
     # Format conversation history properly
     conversation_history = format_conversation_for_decision(messages)
+    logger.info("=== FORMATTED_CONVERSATION_HISTORY ===")
+    logger.info(f"Formatted conversation history:\n{conversation_history}")
+    logger.info("=== END_CONVERSATION_HISTORY ===")
     
     # Get current section's complete prompt for context
     current_section_prompt = ""
@@ -116,14 +127,20 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
         
         logger.info(f"LLM decision analysis completed: {decision}")
 
-        # DEBUG: Log the decision output
+        # DEBUG: Enhanced decision output logging
         logger.info("=== DECISION_OUTPUT_DEBUG ===")
-        logger.info(f"Router directive: {decision.router_directive}")
-        logger.info(f"User satisfaction feedback: {decision.user_satisfaction_feedback}")
-        logger.info(f"Is satisfied: {decision.is_satisfied}")
-        logger.info(f"Section update provided: {bool(decision.section_update)}")
+        logger.info(f"🎯 Router directive: {decision.router_directive}")
+        logger.info(f"📝 User satisfaction feedback: {decision.user_satisfaction_feedback}")
+        logger.info(f"😊 Is satisfied: {decision.is_satisfied}")
+        logger.info(f"💾 Section update provided: {bool(decision.section_update)}")
         if decision.section_update:
             logger.info(f"Section update content keys: {list(decision.section_update.keys())}")
+        
+        # CRITICAL: Log if decision seems wrong
+        if decision.router_directive == "next" and state['current_section'].value == "interview":
+            logger.warning("🚨 POTENTIAL ISSUE: Interview section returning 'next' - Check if this is correct!")
+            logger.warning(f"   Last AI reply was: {last_ai_reply[:200]}...")
+            logger.warning(f"   This suggests Step 7 completion, but verify in logs above")
 
         # Create complete ChatAgentOutput by combining reply + decision
         agent_output = ChatAgentOutput(
