@@ -114,19 +114,30 @@ ENHANCED DECISION RULES - UNDERSTAND THE SECTION FLOW:
 
 2. 🔍 SECTION COMPLETENESS VERIFICATION:
    
-   **CRITICAL: Before deciding to save data or move sections, verify ALL required fields are collected:**
+   **CRITICAL: User satisfaction ≠ Section completion**
    
-   - Check the section's required_fields list in the prompt
-   - For Pain section: Must have pain1_symptom, pain1_struggle, pain1_cost, pain1_consequence, 
+   Before EVER using router_directive="next", verify:
+   - Has the section reached its FINAL step/output as defined in the section prompt?
+   - For multi-step sections: Are ALL steps completed?
+   - For data collection sections: Are ALL required fields collected AND presented in final summary?
+   - Has the user confirmed satisfaction with the COMPLETE section output (not just intermediate confirmations)?
+   
+   Common mistakes to avoid:
+   - Confusing intermediate confirmations (e.g., "Yes, that makes sense" to explanations) with section completion
+   - Moving to next section when user is satisfied with partial progress
+   - Ignoring section-specific flow requirements
+   
+   **Section-specific requirements:**
+   - Pain section: Must have pain1_symptom, pain1_struggle, pain1_cost, pain1_consequence, 
      pain2_symptom, pain2_struggle, pain2_cost, pain2_consequence,
      pain3_symptom, pain3_struggle, pain3_cost, pain3_consequence (12 fields total)
-   - For ICP section: Must have all ICP fields defined in the prompt
-   - For Interview section: Must complete all 7 steps before saving
+   - ICP section: Must have all 8 ICP fields defined in the prompt
+   - Interview section: Must complete all 7 steps before moving to next section
    
-   **If ANY required field is missing:**
+   **If ANY required step/field is missing:**
    - router_directive MUST be "stay"
    - section_update should be null
-   - AI should continue collecting missing information
+   - AI should continue with the next step/question
 
 3. UNIVERSAL SECTION PATTERNS TO RECOGNIZE:
 
@@ -169,9 +180,31 @@ ENHANCED DECISION RULES - UNDERSTAND THE SECTION FLOW:
    - False for content confirmation questions like "Is this correct?"
    
    **For router_directive decision:**
-   - "stay": Continue current section (still collecting, user not satisfied, corrections needed, or MISSING REQUIRED FIELDS)
-   - "next": Move to next section (user satisfied AND all required fields collected)
+   - "stay": Continue current section when:
+     - Section-specific completion criteria NOT met (check section prompt for exact requirements)
+     - Still collecting required information
+     - User needs to provide corrections
+     - ANY intermediate step is in progress
+     
+   - "next": Move to next section ONLY when:
+     - ALL section-specific completion criteria are met
+     - The section prompt explicitly indicates readiness to move (e.g., "Ready to proceed?" in Interview Step 7)
+     - User has expressed satisfaction with the FINAL summary/output of the section
+     - NOT just satisfaction with intermediate steps or explanations
+     
    - "modify:X": User explicitly requests different section
+
+   CRITICAL: "User satisfaction" alone is NOT sufficient for "next". 
+   Each section defines its own completion criteria in its prompt. 
+   You MUST verify these criteria are fully met before using "next".
+
+   **Examples of CORRECT decision making:**
+   - Interview Step 3: User says "Yes, that sounds good" → router_directive="stay" (Steps 4-7 still needed)
+   - Interview Step 7: User confirms "Ready to proceed" → router_directive="next" (All steps completed)
+   - ICP: User satisfied with first question answer → router_directive="stay" (7 more fields needed)
+   - ICP: User satisfied with complete 8-field summary → router_directive="next" (Section complete)
+   - Pain: User satisfied with first pain point → router_directive="stay" (2 more pain points needed)
+   - Pain: User satisfied with all 3 pain points summary → router_directive="next" (Section complete)
 
 5. ⚠️ DEVIATION DETECTION:
    

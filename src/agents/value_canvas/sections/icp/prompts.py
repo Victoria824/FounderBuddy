@@ -158,7 +158,16 @@ CONTENT MODIFICATION vs SECTION JUMPING:
 - You should acknowledge the change and restart the 8-field collection process
 - Do NOT use router_directive "next" until the new ICP is fully defined
 
-If user expresses satisfaction, continue to the next section.
+STEP 7 - Transition to ICP Stress Test:
+If user expresses satisfaction, provide:
+"Great! Let's move on to the ICP stress test.
+
+This will help us validate and strengthen your ICP definition.
+
+Ready to proceed?"
+
+Wait for user confirmation (like "yes", "ready", "let's go") before using router_directive "next".
+
 If user expresses dissatisfaction, use recursive questions to refine conversationally based on user concerns or recommendations."""
 
 # ICP section template
