@@ -86,7 +86,7 @@ class SectionState(BaseModel):
     """State of a single Mission Pitch section."""
     section_id: MissionSectionID
     content: SectionContent | None = None
-    score: int | None = Field(None, ge=0, le=5)  # 0-5 rating
+    satisfaction_feedback: str | None = None  # User's satisfaction feedback
     status: SectionStatus = SectionStatus.PENDING
 
 
@@ -144,10 +144,13 @@ class ChatAgentOutput(BaseModel):
     )
     is_requesting_rating: bool = Field(
         default=False,
-        description="Set to true ONLY when your reply explicitly asks the user for a 0-5 rating."
+        description="Set to true ONLY when your reply explicitly asks the user for a satisfaction rating."
     )
-    score: int | None = Field(
-        None, ge=0, le=5, description="Satisfaction score (0-5) if user provided one."
+    user_satisfaction_feedback: str | None = Field(
+        None, description="User's natural language feedback about satisfaction with the section content."
+    )
+    is_satisfied: bool | None = Field(
+        None, description="AI's interpretation of user satisfaction based on their feedback. True if satisfied, False if needs improvement."
     )
     section_update: dict[str, Any] | None = Field(
         None,

@@ -1,4 +1,4 @@
-"""Memory updater node for Mission Pitch Agent."""
+"""Memory updater node for Special Report Agent."""
 
 import logging
 
@@ -6,20 +6,15 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from core.llm import get_model
+from core.logging_config import get_logger
 from ..models import (
-    MissionPitchState,
-    MissionSectionID,
+    SpecialReportState,
+    SpecialReportSection,
     SectionState,
     SectionContent,
     SectionStatus,
     TiptapDocument,
     RouterDirective,
-    HiddenThemeData,
-    PersonalOriginData,
-    BusinessOriginData,
-    MissionData,
-    ThreeYearVisionData,
-    BigVisionData,
 )
 from ..tools import (
     save_section,
@@ -27,13 +22,13 @@ from ..tools import (
     extract_plain_text,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-async def memory_updater_node(state: MissionPitchState, config: RunnableConfig) -> MissionPitchState:
+async def memory_updater_node(state: SpecialReportState, config: RunnableConfig) -> SpecialReportState:
     """
     Memory updater node that persists section states and updates canvas data.
-    Enhanced with sophisticated two-branch logic from Value Canvas.
+    Enhanced with satisfaction-based state management pattern from Value Canvas.
     """
     logger.info("=== DATABASE_DEBUG: memory_updater_node() ENTRY ===")
     logger.info("DATABASE_DEBUG: Memory updater node processing agent output")
@@ -127,7 +122,7 @@ async def memory_updater_node(state: MissionPitchState, config: RunnableConfig) 
             tiptap_doc = TiptapDocument(type="doc", content=[])
         
         state["section_states"][section_id] = SectionState(
-            section_id=MissionSectionID(section_id),
+            section_id=SpecialReportSection(section_id),
             content=SectionContent(
                 content=tiptap_doc,
                 plain_text=None  # Will be filled later if needed
@@ -148,33 +143,33 @@ async def memory_updater_node(state: MissionPitchState, config: RunnableConfig) 
         # Reset consecutive stays counter since we made progress
         state["consecutive_stays"] = 0
         
-    # Handle cases where agent provides score/status but no structured section_update  
+    # Handle cases where agent provides satisfaction feedback but no structured section_update  
     elif agent_out:
-        # BRANCH 2: Process agent output without section_update (when LLM provides score but no content)
+        # BRANCH 2: Process agent output without section_update (when LLM provides satisfaction but no content)
         logger.info("SAVE_SECTION_DEBUG: ✅ ENTERING BRANCH 2: Processing agent output without section_update")
-        logger.info("DATABASE_DEBUG: Processing agent output without section_update (likely score/status only)")
+        logger.info("DATABASE_DEBUG: Processing agent output without section_update (likely satisfaction only)")
         
         if state.get("context_packet"):
             score_section_id = state["context_packet"].section_id.value
-            logger.debug(f"DATABASE_DEBUG: Processing score/status update for section {score_section_id}")
+            logger.debug(f"DATABASE_DEBUG: Processing satisfaction update for section {score_section_id}")
 
-            # Only proceed if there's satisfaction feedback to save.
-            if agent_out.is_satisfied is None:
-                logger.info(f"DATABASE_DEBUG: No satisfaction data or section_update for {score_section_id}, skipping save.")
+            # Only proceed if there's satisfaction feedback to save OR router directive is NEXT.
+            if agent_out.is_satisfied is None and agent_out.router_directive != RouterDirective.NEXT:
+                logger.debug(f"No satisfaction feedback for {score_section_id}, skipping save")
                 return state
 
-            # We have satisfaction data, so we MUST save. We need to find the content.
+            # We have satisfaction feedback, so we MUST save. We need to find the content.
             content_to_save = None
 
             # 1. Try to find content in the current state for the section
             if score_section_id in state.get("section_states", {}) and state["section_states"][score_section_id].content:
-                logger.info(f"SAVE_SECTION_DEBUG: Found content for section {score_section_id} in state.")
+                logger.debug(f"Found existing content for {score_section_id}")
                 # The content in state should now be the correct Tiptap document
                 content_to_save = state["section_states"][score_section_id].content.content.model_dump()
             
             # 2. If not in state, recover from previous message history with improved logic
             if not content_to_save:
-                logger.warning(f"SAVE_SECTION_DEBUG: Content for {score_section_id} not in state, recovering from history.")
+                logger.debug(f"Recovering content for {score_section_id} from history")
                 messages = state.get("messages", [])
                 summary_text = None
                 # Search backwards through the message history to find the last summary message.
@@ -184,34 +179,27 @@ async def memory_updater_node(state: MissionPitchState, config: RunnableConfig) 
                         content_lower = msg.content.lower()
                         if "summary" in content_lower and ("satisfied" in content_lower or "rate 0-5" in content_lower):
                             summary_text = msg.content
-                            logger.info("SAVE_SECTION_DEBUG: Found candidate summary message in history.")
+                            logger.debug("Found summary message in history")
                             break
                 
                 if summary_text:
-                    logger.info("SAVE_SECTION_DEBUG: Recovered summary text, converting to Tiptap format.")
-                    try:
-                        content_to_save = await create_tiptap_content.ainvoke({"text": summary_text})
-                    except Exception as e:
-                        logger.error(f"SAVE_SECTION_DEBUG: Failed to convert summary to Tiptap: {e}")
+                    logger.debug("Converting recovered text to Tiptap format")
+                    content_to_save = await create_tiptap_content.ainvoke({"text": summary_text})
                 else:
-                    logger.error(f"SAVE_SECTION_DEBUG: Could not recover summary from message history for {score_section_id}.")
+                    logger.error(f"Could not recover summary for {score_section_id}")
 
             # 3. If we found content (either from state or recovery), proceed with saving.
             if content_to_save:
                 computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
-                logger.info(f"SAVE_SECTION_DEBUG: ✅ Calling save_section for {score_section_id} with satisfaction and content.")
                 
-                try:
-                    await save_section.ainvoke({
-                        "user_id": state["user_id"],
-                        "thread_id": state["thread_id"],
-                        "section_id": score_section_id,
-                        "content": content_to_save,
-                        "satisfaction_feedback": agent_out.user_satisfaction_feedback,
-                        "status": computed_status,
-                    })
-                except Exception as e:
-                    logger.warning(f"DATABASE_DEBUG: save_section failed (expected if DB not configured): {e}")
+                await save_section.ainvoke({
+                    "user_id": state["user_id"],
+                    "thread_id": state["thread_id"],
+                    "section_id": score_section_id,
+                    "content": content_to_save,
+                    "satisfaction_feedback": agent_out.user_satisfaction_feedback,
+                    "status": computed_status,
+                })
 
                 # Update local state consistently, whether it existed before or not.
                 # Convert content_to_save to TiptapDocument
@@ -221,7 +209,7 @@ async def memory_updater_node(state: MissionPitchState, config: RunnableConfig) 
                     tiptap_doc = content_to_save
                 
                 state.setdefault("section_states", {})[score_section_id] = SectionState(
-                    section_id=MissionSectionID(score_section_id),
+                    section_id=SpecialReportSection(score_section_id),
                     content=SectionContent(
                         content=tiptap_doc,
                         plain_text=None
@@ -229,13 +217,30 @@ async def memory_updater_node(state: MissionPitchState, config: RunnableConfig) 
                     satisfaction_feedback=agent_out.user_satisfaction_feedback,
                     status=computed_status,
                 )
-                logger.info(f"DATABASE_DEBUG: ✅ Updated/created section state for {score_section_id} with satisfaction {agent_out.is_satisfied}")
             else:
-                # 4. If content recovery failed, we must not call save_section with empty content.
-                logger.error(f"DATABASE_DEBUG: ❌ CRITICAL: Aborting save for section {score_section_id} due to missing content.")
+                # 4. If content recovery failed, check if we should still update status
+                if agent_out.router_directive == RouterDirective.NEXT:
+                    # User wants to proceed, mark section as DONE even without content
+                    logger.debug(f"Marking {score_section_id} as DONE (router_directive=NEXT)")
+                    
+                    computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
+                    
+                    # Create minimal section state with DONE status
+                    state.setdefault("section_states", {})[score_section_id] = SectionState(
+                        section_id=SpecialReportSection(score_section_id),
+                        content=SectionContent(
+                            content=TiptapDocument(type="doc", content=[]),  # Empty content
+                            plain_text=None
+                        ),
+                        satisfaction_feedback=agent_out.user_satisfaction_feedback,
+                        status=computed_status,  # Will be DONE because of router_directive == NEXT
+                    )
+                else:
+                    # Not moving next and no content, cannot update
+                    logger.error(f"Cannot save {score_section_id}: missing content")
 
         else:
-            logger.warning("DATABASE_DEBUG: ⚠️ Cannot update section state as context_packet is missing")
+            logger.warning("Cannot update section state: missing context")
 
     else:
         # No agent output at all - safety mechanism for stuck states
@@ -269,7 +274,7 @@ async def memory_updater_node(state: MissionPitchState, config: RunnableConfig) 
 
 
 async def extract_and_update_canvas_data(
-    state: MissionPitchState, 
+    state: SpecialReportState, 
     section_id: str, 
     section_update: dict
 ) -> None:
@@ -277,92 +282,66 @@ async def extract_and_update_canvas_data(
     logger.info(f"Extracting structured data for section: {section_id}")
     
     # Get plain text from tiptap content
-    plain_text = await extract_plain_text.ainvoke(section_update['content'])
+    plain_text = await extract_plain_text.ainvoke({"tiptap_json": section_update['content']})
     
     # Extract data based on section type
     llm = get_model()
     
     try:
-        if section_id == MissionSectionID.HIDDEN_THEME.value:
-            structured_llm = llm.with_structured_output(HiddenThemeData)
+        if section_id == SpecialReportSection.TOPIC_SELECTION.value:
+            # Import section-specific data models locally to avoid circular imports
+            from ..sections.topic_selection.models import TopicSelectionData
+            structured_llm = llm.with_structured_output(TopicSelectionData)
             extracted_data = await structured_llm.ainvoke([
-                SystemMessage(content=f"Extract hidden theme data from this content: {plain_text}")
+                SystemMessage(content=f"Extract topic selection data from this content: {plain_text}")
             ])
             
             # Update canvas_data with extracted fields
             canvas_data = state["canvas_data"]
-            if extracted_data.theme_rant:
-                canvas_data.theme_rant = extracted_data.theme_rant
-            if extracted_data.theme_1sentence:
-                canvas_data.theme_1sentence = extracted_data.theme_1sentence
-            if extracted_data.theme_confidence:
-                canvas_data.theme_confidence = extracted_data.theme_confidence
+            if extracted_data.selected_topic:
+                canvas_data.topic_data.selected_topic = extracted_data.selected_topic
+            if extracted_data.subtitle:
+                canvas_data.topic_data.subtitle = extracted_data.subtitle
                 
-        elif section_id == MissionSectionID.PERSONAL_ORIGIN.value:
-            structured_llm = llm.with_structured_output(PersonalOriginData)
+        elif section_id == SpecialReportSection.CONTENT_DEVELOPMENT.value:
+            from ..sections.content_development.models import ContentDevelopmentData
+            structured_llm = llm.with_structured_output(ContentDevelopmentData)
             extracted_data = await structured_llm.ainvoke([
-                SystemMessage(content=f"Extract personal origin data from this content: {plain_text}")
+                SystemMessage(content=f"Extract content development data from this content: {plain_text}")
             ])
             
             canvas_data = state["canvas_data"]
-            if extracted_data.personal_origin_age:
-                canvas_data.personal_origin_age = extracted_data.personal_origin_age
-            if extracted_data.personal_origin_setting:
-                canvas_data.personal_origin_setting = extracted_data.personal_origin_setting
-            if extracted_data.personal_origin_key_moment:
-                canvas_data.personal_origin_key_moment = extracted_data.personal_origin_key_moment
-            if extracted_data.personal_origin_link_to_theme:
-                canvas_data.personal_origin_link_to_theme = extracted_data.personal_origin_link_to_theme
+            if extracted_data.key_stories:
+                canvas_data.content_data.personal_stories = extracted_data.key_stories[:5]
+            if extracted_data.main_framework:
+                canvas_data.content_data.visual_frameworks = [extracted_data.main_framework]
+            if extracted_data.proof_elements:
+                canvas_data.content_data.proof_points = extracted_data.proof_elements[:10]
+            if extracted_data.action_steps:
+                canvas_data.content_data.immediate_actions = extracted_data.action_steps[:10]
                 
-        elif section_id == MissionSectionID.BUSINESS_ORIGIN.value:
-            structured_llm = llm.with_structured_output(BusinessOriginData)
+        elif section_id == SpecialReportSection.REPORT_STRUCTURE.value:
+            from ..sections.report_structure.models import ReportStructureData
+            structured_llm = llm.with_structured_output(ReportStructureData)
             extracted_data = await structured_llm.ainvoke([
-                SystemMessage(content=f"Extract business origin data from this content: {plain_text}")
+                SystemMessage(content=f"Extract report structure data from this content: {plain_text}")
             ])
             
             canvas_data = state["canvas_data"]
-            if extracted_data.business_origin_pattern:
-                canvas_data.business_origin_pattern = extracted_data.business_origin_pattern
-            if extracted_data.business_origin_story:
-                canvas_data.business_origin_story = extracted_data.business_origin_story
-            if extracted_data.business_origin_evidence:
-                canvas_data.business_origin_evidence = extracted_data.business_origin_evidence
-                
-        elif section_id == MissionSectionID.MISSION.value:
-            structured_llm = llm.with_structured_output(MissionData)
-            extracted_data = await structured_llm.ainvoke([
-                SystemMessage(content=f"Extract mission data from this content: {plain_text}")
-            ])
-            
-            canvas_data = state["canvas_data"]
-            if extracted_data.mission_statement:
-                canvas_data.mission_statement = extracted_data.mission_statement
-                
-        elif section_id == MissionSectionID.THREE_YEAR_VISION.value:
-            structured_llm = llm.with_structured_output(ThreeYearVisionData)
-            extracted_data = await structured_llm.ainvoke([
-                SystemMessage(content=f"Extract 3-year vision data from this content: {plain_text}")
-            ])
-            
-            canvas_data = state["canvas_data"]
-            if extracted_data.three_year_milestone:
-                canvas_data.three_year_milestone = extracted_data.three_year_milestone
-            if extracted_data.three_year_metrics:
-                canvas_data.three_year_metrics = extracted_data.three_year_metrics
-                
-        elif section_id == MissionSectionID.BIG_VISION.value:
-            structured_llm = llm.with_structured_output(BigVisionData)
-            extracted_data = await structured_llm.ainvoke([
-                SystemMessage(content=f"Extract big vision data from this content: {plain_text}")
-            ])
-            
-            canvas_data = state["canvas_data"]
-            if extracted_data.big_vision:
-                canvas_data.big_vision = extracted_data.big_vision
-            if extracted_data.big_vision_selfless_test_passed:
-                canvas_data.big_vision_selfless_test_passed = extracted_data.big_vision_selfless_test_passed
-                
-        # Add similar blocks for other sections (values, impact, stakeholders, goals, metrics)
+            if extracted_data.attract_content:
+                canvas_data.report_structure.attract_content = extracted_data.attract_content
+            if extracted_data.disrupt_content:
+                canvas_data.report_structure.disrupt_content = extracted_data.disrupt_content
+            if extracted_data.inform_content:
+                canvas_data.report_structure.inform_content = extracted_data.inform_content
+            if extracted_data.recommend_content:
+                canvas_data.report_structure.recommend_content = extracted_data.recommend_content
+            if extracted_data.overcome_content:
+                canvas_data.report_structure.overcome_content = extracted_data.overcome_content
+            if extracted_data.reinforce_content:
+                canvas_data.report_structure.reinforce_content = extracted_data.reinforce_content
+            if extracted_data.invite_content:
+                canvas_data.report_structure.invite_content = extracted_data.invite_content
         
         logger.info(f"Successfully extracted and updated canvas data for section: {section_id}")
         

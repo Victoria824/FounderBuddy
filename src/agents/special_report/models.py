@@ -1,7 +1,6 @@
 """Pydantic models for Special Report Agent."""
 
-from enum import Enum
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 from uuid import UUID
 import uuid
 
@@ -9,27 +8,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field, field_validator
 
-
-class SectionStatus(str, Enum):
-    """Status of a section."""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress" 
-    DONE = "done"
-
-
-class RouterDirective(str, Enum):
-    """Router directive for navigation control."""
-    STAY = "stay"
-    NEXT = "next"
-    MODIFY = "modify"  # Format: "modify:section_id"
-
-
-class SpecialReportSection(str, Enum):
-    """Special Report section identifiers following the 3-step process."""
-    TOPIC_SELECTION = "topic_selection"
-    CONTENT_DEVELOPMENT = "content_development"
-    REPORT_STRUCTURE = "report_structure"
-    IMPLEMENTATION = "implementation"
+from .enums import SectionStatus, RouterDirective, SpecialReportSection
 
 
 class TiptapTextNode(BaseModel):
@@ -71,7 +50,7 @@ class SectionState(BaseModel):
     """State of a single section."""
     section_id: SpecialReportSection
     content: SectionContent | None = None
-    score: int | None = Field(None, ge=0, le=5)  # 0-5 rating
+    satisfaction_feedback: str | None = None  # User's satisfaction feedback
     status: SectionStatus = SectionStatus.PENDING
 
 
@@ -90,6 +69,7 @@ class TopicData(BaseModel):
     headline_options: list[str] | None = Field(None, max_length=10)
     subtitle: str | None = None
     topic_confirmed: bool = False
+
 
 class ContentData(BaseModel):
     """Data for the 4 thinking styles content development."""
@@ -111,6 +91,7 @@ class ContentData(BaseModel):
     immediate_actions: list[str] | None = Field(None, max_length=10)
     quick_wins: list[str] | None = Field(None, max_length=5)
 
+
 class ReportStructureData(BaseModel):
     """Data for the 7-step article structure."""
     attract_content: str | None = None
@@ -120,6 +101,7 @@ class ReportStructureData(BaseModel):
     overcome_content: str | None = None
     reinforce_content: str | None = None
     invite_content: str | None = None
+
 
 class SpecialReportData(BaseModel):
     """Complete Special Report data structure."""
@@ -132,6 +114,7 @@ class SpecialReportData(BaseModel):
 
 class ChatAgentOutput(BaseModel):
     """Output from Chat Agent node."""
+
     reply: str = Field(..., description="Conversational response to the user.")
     router_directive: str = Field(
         ...,
@@ -139,10 +122,13 @@ class ChatAgentOutput(BaseModel):
     )
     is_requesting_rating: bool = Field(
         default=False,
-        description="Set to true ONLY when your reply explicitly asks the user for a 0-5 rating."
+        description="Set to true ONLY when your reply explicitly asks the user for a satisfaction rating."
     )
-    score: int | None = Field(
-        None, ge=0, le=5, description="Satisfaction score (0-5) if user provided one."
+    user_satisfaction_feedback: str | None = Field(
+        None, description="User's natural language feedback about satisfaction with the section content."
+    )
+    is_satisfied: bool | None = Field(
+        None, description="AI's interpretation of user satisfaction based on their feedback. True if satisfied, False if needs improvement."
     )
     section_update: dict[str, Any] | None = Field(
         None,
@@ -193,7 +179,7 @@ class SpecialReportState(MessagesState):
     current_section: SpecialReportSection = SpecialReportSection.TOPIC_SELECTION
     context_packet: ContextPacket | None = None
     section_states: dict[str, SectionState] = Field(default_factory=dict)
-    router_directive: str = RouterDirective.NEXT  # Start by loading first section
+    router_directive: str = RouterDirective.NEXT
     finished: bool = False
 
     # Special Report data
@@ -232,57 +218,3 @@ class SectionTemplate(BaseModel):
     validation_rules: list[ValidationRule] = Field(default_factory=list)
     required_fields: list[str] = Field(default_factory=list)
     next_section: SpecialReportSection | None = None
-
-
-# Structured Output Models for Data Extraction
-
-class TopicSelectionData(BaseModel):
-    """Structured data for Topic Selection section."""
-    selected_headline: str | None = Field(None, description="Final headline choice")
-    subtitle: str | None = Field(None, description="Supporting subtitle")
-    topic_rationale: str | None = Field(None, description="Why this topic works for their ICP")
-    transformation_promise: str | None = Field(None, description="What transformation this promises")
-
-class ContentDevelopmentData(BaseModel):
-    """Structured data for Content Development section."""
-    thinking_style_focus: str | None = Field(None, description="Primary thinking style for this client")
-    key_stories: list[str] | None = Field(None, description="Selected stories for report", max_length=5)
-    main_framework: str | None = Field(None, description="Primary visual framework to use")
-    proof_elements: list[str] | None = Field(None, description="Validation elements selected", max_length=5)
-    action_steps: list[str] | None = Field(None, description="Immediate actions for readers", max_length=5)
-
-class ReportStructureData(BaseModel):
-    """Structured data for Report Structure section.""" 
-    section_summaries: dict[str, str] | None = Field(None, description="Summary of each 7-step section")
-    key_transitions: list[str] | None = Field(None, description="Important section transitions", max_length=6)
-    call_to_action: str | None = Field(None, description="Final CTA and next step")
-    estimated_word_count: int | None = Field(None, description="Estimated total word count")
-
-
-# Structured Output Models for Data Extraction
-
-class TopicSelectionExtractedData(BaseModel):
-    """Extracted data for Topic Selection section."""
-    selected_headline: str | None = Field(None, description="Final headline choice")
-    subtitle: str | None = Field(None, description="Supporting subtitle")
-    topic_rationale: str | None = Field(None, description="Why this topic works for their ICP")
-    transformation_promise: str | None = Field(None, description="What transformation this promises")
-
-class ContentDevelopmentExtractedData(BaseModel):
-    """Extracted data for Content Development section."""
-    thinking_style_focus: str | None = Field(None, description="Primary thinking style for this client")
-    key_stories: list[str] | None = Field(None, description="Selected stories for report", max_length=5)
-    main_framework: str | None = Field(None, description="Primary visual framework to use")
-    proof_elements: list[str] | None = Field(None, description="Validation elements selected", max_length=5)
-    action_steps: list[str] | None = Field(None, description="Immediate actions for readers", max_length=5)
-
-class ReportStructureExtractedData(BaseModel):
-    """Extracted data for Report Structure section.""" 
-    attract_content: str | None = Field(None, description="Attract section content")
-    disrupt_content: str | None = Field(None, description="Disrupt section content")
-    inform_content: str | None = Field(None, description="Inform section content")
-    recommend_content: str | None = Field(None, description="Recommend section content")
-    overcome_content: str | None = Field(None, description="Overcome section content")
-    reinforce_content: str | None = Field(None, description="Reinforce section content")
-    invite_content: str | None = Field(None, description="Invite section content")
-    estimated_word_count: int | None = Field(None, description="Estimated total word count")

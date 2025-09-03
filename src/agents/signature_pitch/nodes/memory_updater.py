@@ -35,7 +35,7 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
     agent_out = state.get("agent_output")
     logger.debug(f"DATABASE_DEBUG: Agent output exists: {bool(agent_out)}")
     if agent_out:
-        logger.debug(f"DATABASE_DEBUG: Agent output - section_update: {bool(agent_out.section_update)}, score: {agent_out.score}, router_directive: {agent_out.router_directive}")
+        logger.debug(f"DATABASE_DEBUG: Agent output - section_update: {bool(agent_out.section_update)}, is_satisfied: {agent_out.is_satisfied}, router_directive: {agent_out.router_directive}")
 
     # [DIAGNOSTIC] Log state before update
     logger.info(f"DATABASE_DEBUG: section_states BEFORE update: {state.get('section_states', {})}")
@@ -43,12 +43,12 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
     context_packet = state.get('context_packet')
     logger.debug(f"DATABASE_DEBUG: Context packet section: {context_packet.section_id if context_packet else None}")
 
-    # Decide status based on score and directive
-    def _status_from_output(score, directive):
+    # Decide status based on satisfaction and directive
+    def _status_from_output(is_satisfied, directive):
         """Return status *string* to align with get_next_unfinished_section() logic."""
         if directive == RouterDirective.NEXT:
             return SectionStatus.DONE.value  # "done"
-        if score is not None and score >= 3:
+        if is_satisfied is not None and is_satisfied:
             return SectionStatus.DONE.value
         return SectionStatus.IN_PROGRESS.value
 
@@ -57,7 +57,7 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
     logger.info(f"SAVE_SECTION_DEBUG: - agent_out exists: {bool(agent_out)}")
     if agent_out:
         logger.info(f"SAVE_SECTION_DEBUG: - agent_out.section_update exists: {bool(agent_out.section_update)}")
-        logger.info(f"SAVE_SECTION_DEBUG: - agent_out.score: {agent_out.score}")
+        logger.info(f"SAVE_SECTION_DEBUG: - agent_out.is_satisfied: {agent_out.is_satisfied}")
         logger.info(f"SAVE_SECTION_DEBUG: - agent_out.router_directive: {agent_out.router_directive}")
     else:
         logger.info("SAVE_SECTION_DEBUG: - No agent_out, will not call save_section")
@@ -88,12 +88,12 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
         logger.debug("DATABASE_DEBUG: Calling save_section tool with structured content")
         
         # [CRITICAL DEBUG] Log the exact parameters being passed to save_section
-        computed_status = _status_from_output(agent_out.score, agent_out.router_directive)
+        computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
         logger.info("SAVE_SECTION_DEBUG: About to call save_section with:")
         logger.info(f"SAVE_SECTION_DEBUG: - user_id: {state['user_id']}")
         logger.info(f"SAVE_SECTION_DEBUG: - thread_id: {state['thread_id']}")
         logger.info(f"SAVE_SECTION_DEBUG: - section_id: {section_id}")
-        logger.info(f"SAVE_SECTION_DEBUG: - score: {agent_out.score} (type: {type(agent_out.score)})")
+        logger.info(f"SAVE_SECTION_DEBUG: - is_satisfied: {agent_out.is_satisfied} (type: {type(agent_out.is_satisfied)})")
         logger.info(f"SAVE_SECTION_DEBUG: - status: {computed_status} (type: {type(computed_status)})")
         logger.info(f"SAVE_SECTION_DEBUG: - router_directive was: {agent_out.router_directive} (type: {type(agent_out.router_directive)})")
         
@@ -103,7 +103,7 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
                 "thread_id": state["thread_id"],
                 "section_id": section_id,
                 "content": agent_out.section_update['content'] if isinstance(agent_out.section_update, dict) else agent_out.section_update,
-                "score": agent_out.score,
+                "satisfaction_feedback": agent_out.user_satisfaction_feedback,
                 "status": computed_status,
             })
             logger.debug(f"DATABASE_DEBUG: save_section returned: {bool(save_result)}")
@@ -126,8 +126,8 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
                 content=tiptap_doc,
                 plain_text=None  # Will be filled later if needed
             ),
-            score=agent_out.score,
-            status=_status_from_output(agent_out.score, agent_out.router_directive),
+            satisfaction_feedback=agent_out.user_satisfaction_feedback,
+            status=_status_from_output(agent_out.is_satisfied, agent_out.router_directive),
         )
         logger.info(f"SAVE_SECTION_DEBUG: ✅ BRANCH 1 COMPLETED: Section {section_id} saved with structured content")
 
@@ -152,12 +152,12 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
             score_section_id = state["context_packet"].section_id.value
             logger.debug(f"DATABASE_DEBUG: Processing score/status update for section {score_section_id}")
 
-            # Only proceed if there's a score to save.
-            if agent_out.score is None:
-                logger.info(f"DATABASE_DEBUG: No score or section_update for {score_section_id}, skipping save.")
+            # Only proceed if there's satisfaction feedback to save.
+            if agent_out.is_satisfied is None:
+                logger.info(f"DATABASE_DEBUG: No satisfaction data or section_update for {score_section_id}, skipping save.")
                 return state
 
-            # We have a score, so we MUST save. We need to find the content.
+            # We have satisfaction data, so we MUST save. We need to find the content.
             content_to_save = None
 
             # 1. Try to find content in the current state for the section
@@ -192,8 +192,8 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
 
             # 3. If we found content (either from state or recovery), proceed with saving.
             if content_to_save:
-                computed_status = _status_from_output(agent_out.score, agent_out.router_directive)
-                logger.info(f"SAVE_SECTION_DEBUG: ✅ Calling save_section for {score_section_id} with score and content.")
+                computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
+                logger.info(f"SAVE_SECTION_DEBUG: ✅ Calling save_section for {score_section_id} with satisfaction and content.")
                 
                 try:
                     await save_section.ainvoke({
@@ -201,7 +201,7 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
                         "thread_id": state["thread_id"],
                         "section_id": score_section_id,
                         "content": content_to_save,
-                        "score": agent_out.score,
+                        "satisfaction_feedback": agent_out.user_satisfaction_feedback,
                         "status": computed_status,
                     })
                 except Exception as e:
@@ -220,10 +220,10 @@ async def memory_updater_node(state: SignaturePitchState, config: RunnableConfig
                         content=tiptap_doc,
                         plain_text=None
                     ),
-                    score=agent_out.score,
+                    satisfaction_feedback=agent_out.user_satisfaction_feedback,
                     status=computed_status,
                 )
-                logger.info(f"DATABASE_DEBUG: ✅ Updated/created section state for {score_section_id} with score {agent_out.score}")
+                logger.info(f"DATABASE_DEBUG: ✅ Updated/created section state for {score_section_id} with satisfaction {agent_out.is_satisfied}")
             else:
                 # 4. If content recovery failed, we must not call save_section with empty content.
                 logger.error(f"DATABASE_DEBUG: ❌ CRITICAL: Aborting save for section {score_section_id} due to missing content.")
