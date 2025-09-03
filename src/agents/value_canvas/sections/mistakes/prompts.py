@@ -107,7 +107,7 @@ CRITICAL SUMMARY RULE:
 - **Reveal the Flawed Worldview:** Your summary must not just reflect the user's input, but reveal the flawed worldview that connects all mistakes. Synthesize their responses, add insights about the self-perpetuating cycle, and name the core flawed paradigm to deliver an "aha" moment.
 - **Sharpen into Insights:** Take the user's descriptions of errors in thinking/action and sharpen them into powerful, memorable insights.
 - **Connect to the Signature Method:** Show how the Signature Method is designed to systematically break this cycle of mistakes.
-- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for satisfaction feedback.
+- **Final Output:** Present the generated summary in your conversational response when you ask for satisfaction feedback.
 
 AI OUTPUT 2 (MANDATORY FINAL RESPONSE):
 Nice work, I'm glad you're happy with it.
@@ -116,7 +116,7 @@ Now we're ready to move onto The Prize.
 
 Ready?
 
-CRITICAL REMINDER: When showing the Mistakes summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!"""
+CRITICAL REMINDER: When showing the Mistakes summary and asking for rating, ensure the complete data is presented clearly. This will trigger the system to save the user's progress."""
 
 # Mistakes section template
 MISTAKES_TEMPLATE = SectionTemplate(

@@ -164,7 +164,7 @@ CRITICAL - ICP MODIFICATION FLOW:
 When user selects a specific adjustment option that requires changing ICP attributes:
 - Acknowledge their choice: "Got it. We'll adjust your ICP to [specific change]."
 - Explain the need to jump sections: "To make this change, we need to go back to the ICP section."
-- Set router_directive to "modify:icp" to actually implement the change
+- Indicate that the system should switch to the ICP section to implement the change
 - Example: User says "Option A" → "We'll adjust your ICP to focus on roles with more decision-making authority, like senior managers or directors. Let's go back to the ICP section to make this adjustment."
 
 If user asks "how to improve [specific area]":
@@ -182,16 +182,16 @@ C. Focus on {{icp_context_scale}} in fintech/healthtech where you have case stud
 Choose A, B, C, or continue with current ICP?"
 
 CRITICAL COMPLETION RULES (For Decision Analysis):
-- Step 6 presents a SUMMARY that requires section_update to save the stress test scores
+- Step 6 presents a SUMMARY that triggers saving the stress test scores
 - When the AI presents the score table in Step 6, this is a summary that needs to be saved
-- NEVER use router_directive "next" until BOTH conditions are met:
+- NEVER indicate completion until BOTH conditions are met:
   1. User has scored >= 14/25
   2. User has expressed satisfaction/confirmation to proceed
-- If score < 14, keep router_directive as "stay" and continue refinement
+- If score < 14, continue refinement process
 - CRITICAL - ICP MODIFICATION DETECTION: When user expresses intent to modify ICP attributes:
   - Look for phrases like: "adjust my icp", "focus on [role]", "target [different segment]", "change to [role]"
   - User selecting a specific adjustment option (A, B, C) that requires ICP changes
-  - Use router_directive "modify:icp" to jump to ICP section for actual data modification
+  - Indicate need to switch to ICP section for actual data modification
 - When ICP is modified via section jump, the ICP section will update the ICP data in memory
 - The stress test scores MUST be saved when presented in Step 6
 
@@ -199,9 +199,9 @@ SECTION COMPLETION PATTERN:
 - When AI shows the score summary table → This is displaying a summary
 - When AI asks "Would you like to proceed or refine?" → This is asking for satisfaction feedback
 - When user says "that looks great", "proceed", "yes" → User is satisfied
-- At this point: router_directive should be "next" (if score >= 14)
+- At this point: indicate readiness to proceed to next section (if score >= 14)
 
-DATA TO SAVE (via section_update when score summary is presented):
+DATA TO SAVE (when score summary is presented):
 - icp_stress_test_can_influence: [0-5]
 - icp_stress_test_like_working: [0-5]
 - icp_stress_test_afford_premium: [0-5]

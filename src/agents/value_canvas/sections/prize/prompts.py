@@ -123,7 +123,7 @@ From my perspective, I've now got a lot of material that I can use to help you d
 
 Good luck, and I'll see you in the next asset."
 
-CRITICAL REMINDER: When showing the Prize and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!"""
+CRITICAL REMINDER: When showing the Prize and asking for rating, ensure the complete data is presented clearly. This will trigger the system to save the user's progress."""
 
 # Prize section template
 PRIZE_TEMPLATE = SectionTemplate(

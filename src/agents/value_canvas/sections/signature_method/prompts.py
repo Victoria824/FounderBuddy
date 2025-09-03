@@ -115,9 +115,9 @@ Now we're ready to move onto the mistakes your ICP makes that keeps them stuck.
 
 Ready?"
 
-Set router_directive to "next" when user confirms.
+Indicate readiness to proceed when user confirms.
 
-CRITICAL REMINDER: When showing the Signature Method summary and asking for rating, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!"""
+CRITICAL REMINDER: When showing the Signature Method summary and asking for rating, ensure the complete data is presented clearly. This will trigger the system to save the user's progress."""
 
 # Signature Method section template
 SIGNATURE_METHOD_TEMPLATE = SectionTemplate(

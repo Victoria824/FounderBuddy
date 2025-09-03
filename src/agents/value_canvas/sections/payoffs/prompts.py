@@ -206,24 +206,10 @@ Resolution - [Closing loop to pain symptom]
 NATURAL LANGUAGE SUMMARY
 [Synthesized narrative showing the complete transformation]
 
-IMPORTANT: When providing section_update, use this simple structure:
-```json
-{{
-  "section_update": {{
-    "content": {{
-      "type": "doc", 
-      "content": [
-        {{
-          "type": "paragraph",
-          "content": [{{"type": "text", "text": "Your complete payoffs summary content here..."}}]
-        }}
-      ]
-    }}
-  }}
-}}
-```
+SUMMARY PRESENTATION GUIDELINE:
+Present the three payoffs in a clear, organized format in your conversational response. Use a structure that makes it easy for the user to review and understand their payoffs.
 
-CRITICAL: Only provide section_update with ALL THREE payoffs when they are complete and the user has confirmed satisfaction with the final summary."""
+CRITICAL: Only present a complete summary with ALL THREE payoffs when they are fully collected and the user has confirmed satisfaction with the final summary."""
 
 # Payoffs section template
 PAYOFFS_TEMPLATE = SectionTemplate(

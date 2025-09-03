@@ -113,38 +113,24 @@ CRITICAL SUMMARY RULE:
 - **Create Revelations:** The goal of the summary is to give the user an "aha" moment where they see their client's problems in a new, clearer light. Your summary should feel like a revelation, not a repetition.
 - **Structure:** Present the summary in a clear, compelling way. You can still list the three pain points, but frame them within a larger narrative about the client's core challenge.
 - **Example enrichment:** If a user says the symptom is "slow sales," you could reframe it as "Stagnant Growth Engine." If they say the cost is "wasted time," you could articulate it as "Burning valuable runway on low-impact activities."
-- **Final Output:** The generated summary MUST be included in the `reply` and `section_update` fields when you ask for satisfaction feedback.
-- **MANDATORY FINAL STEP:** After presenting the full synthesized summary in the `reply` field, you MUST conclude your response by asking the user for satisfaction feedback. Your final sentence must be: "Are you satisfied with this summary? If you need changes, please tell me what specifically needs to be adjusted."
+- **Final Output:** Present the generated summary in your conversational response when you ask for satisfaction feedback.
+- **MANDATORY FINAL STEP:** After presenting the full synthesized summary, you MUST conclude your response by asking the user for satisfaction feedback. Your final sentence must be: "Are you satisfied with this summary? If you need changes, please tell me what specifically needs to be adjusted."
  
- CRITICAL CLARIFICATION: The `reply` field is for the human-readable, conversational text ONLY. Do NOT include any JSON strings, data structures, or text like `{{"pain_points":...}}` inside the `reply` string. That data belongs exclusively in the `section_update` object.
+ CRITICAL CLARIFICATION: Focus on generating natural, conversational responses. Do NOT include any JSON strings or data structures in your conversational text.
 
-WHEN THE USER PROVIDES A RATING:
-- If score is 3 or higher: Your response MUST be a transitional message to the next section. For example: "Thank you for your rating! Let's move on to the next section: Deep Fear." You MUST also set the "router_directive" to "next".
-- If score is 2 or lower: Your response MUST be an offer to refine the current section. For example: "Thank you for your rating! Let's refine this section together – what would you like to adjust?" You MUST also set the "router_directive" to "stay".
+WHEN THE USER PROVIDES FEEDBACK:
+- If user expresses satisfaction (score 3 or higher, or positive feedback): Provide a transitional message indicating readiness to move to the next section. For example: "Thank you for your feedback! Let's move on to the next section: Deep Fear."
+- If user expresses dissatisfaction (score 2 or lower, or concerns): Offer to refine the current section. For example: "Thank you for your feedback! Let's refine this section together – what would you like to adjust?"
 
  Current progress in this section:
  - Pain Point 1: {{pain1_symptom if pain1_symptom else "Not yet collected"}}
  - Pain Point 2: {{pain2_symptom if pain2_symptom else "Not yet collected"}}
  - Pain Point 3: {{pain3_symptom if pain3_symptom else "Not yet collected"}}
 
-IMPORTANT: When providing section_update, use this simple structure:
-```json
-{{
-  "section_update": {{
-    "content": {{
-      "type": "doc", 
-      "content": [
-        {{
-          "type": "paragraph",
-          "content": [{{"type": "text", "text": "Your summary content here..."}}]
-        }}
-      ]
-    }}
-  }}
-}}
-```
+SUMMARY PRESENTATION GUIDELINE:
+Present the three pain points in a clear, organized format in your conversational response. Use a structure that makes it easy for the user to review and understand their pain points.
 
-CRITICAL: Only provide section_update with ALL THREE pain points when they are complete. The rating should be requested only after all three pain points have been collected."""
+CRITICAL: Only present a complete summary with ALL THREE pain points when they are fully collected. The rating should be requested only after all three pain points have been gathered."""
 
 # Pain section template
 PAIN_TEMPLATE = SectionTemplate(

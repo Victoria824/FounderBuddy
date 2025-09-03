@@ -105,13 +105,13 @@ If user indicates readiness to continue (examples):
 - "makes sense", "got it", "understood", "clear"
 - "next", "continue", "move on", "proceed"
 - Any affirmative response showing understanding
-→ Set router_directive = "next"
+→ Indicate readiness to proceed to next section
 → Save insights to memory
 
 If user asks questions or expresses confusion:
 - Answer in 2-3 sentences maximum
 - Ask again: "Any other questions, or shall we continue?"
-- Keep router_directive = "stay"
+- Continue working in current section
 
 DATA TO SAVE when proceeding:
 - All 5 golden insights as presented

@@ -173,7 +173,7 @@ Learning to ride a bike:
 Pain: Tears & Tantrums during practice sessions
 Deep Fear: "Am I failing as a parent?"
 
-CRITICAL REMINDER: When showing the Deep Fear summary and asking for satisfaction, you MUST include section_update with the complete data in Tiptap JSON format. Without section_update, the user's progress will NOT be saved!"""
+CRITICAL REMINDER: When showing the Deep Fear summary and asking for satisfaction, ensure the complete data is presented clearly. This will trigger the system to save the user's progress."""
 
 # Deep Fear section template
 DEEP_FEAR_TEMPLATE = SectionTemplate(
