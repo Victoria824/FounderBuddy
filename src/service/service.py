@@ -1,6 +1,10 @@
 import inspect
 import json
 import logging
+from core.logging_config import get_logger, setup_logging
+
+# Setup logging configuration
+setup_logging()
 import time
 import warnings
 from collections.abc import AsyncGenerator
@@ -44,7 +48,7 @@ from service.utils import (
 )
 
 warnings.filterwarnings("ignore", category=LangChainBetaWarning)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -368,27 +372,21 @@ async def message_generator(
 
     This is the workhorse method for the /stream endpoint.
     """
-    # Log detailed stream request
-    logger.info(f"=== STREAM_REQUEST: agent_id={agent_id} ===")
-    logger.info(f"STREAM_REQUEST: user_id={user_input.user_id}")
-    logger.info(f"STREAM_REQUEST: thread_id={user_input.thread_id}")
-    # Model selection is handled by server configuration
-    logger.info(f"STREAM_REQUEST: stream_tokens={user_input.stream_tokens}")
-    logger.info(f"STREAM_REQUEST: message_length={len(user_input.message) if user_input.message else 0}")
+    # Log stream request summary
+    logger.info(f"[STREAM] Start: agent={agent_id}, user={user_input.user_id}, thread={user_input.thread_id[:8] if user_input.thread_id else 'new'}...")
     
     agent: AgentGraph = get_agent(agent_id)
     kwargs, run_id = await _handle_input(user_input, agent)
     
-    logger.info(f"STREAM_REQUEST: run_id={run_id}")
-    logger.info(f"STREAM_REQUEST: config_thread_id={kwargs['config']['configurable']['thread_id']}")
+    logger.debug(f"Stream run_id: {run_id}")
 
     # Get the current thread's message history length to filter out historical messages
     try:
         current_state = await agent.aget_state(config=kwargs["config"])
         initial_message_count = len(current_state.values.get("messages", []))
-        logger.info(f"STREAM_FIX: Initial message count: {initial_message_count}")
+        logger.debug(f"Initial message count: {initial_message_count}")
     except Exception as e:
-        logger.warning(f"STREAM_FIX: Could not get initial message count: {e}")
+        logger.debug(f"Could not get initial message count: {e}")
         initial_message_count = 0
 
     sent_message_count = 0  # Track the number of messages sent to prevent duplicates
@@ -398,8 +396,12 @@ async def message_generator(
         async for stream_event in agent.astream(
             **kwargs, stream_mode=["updates", "messages", "custom"]
         ):
-            # [STREAM_DEBUG] Log every raw event from the graph stream
-            logger.info(f"STREAM_DEBUG: Raw Event Received: {repr(stream_event)}")
+            # Log stream events efficiently
+            if isinstance(stream_event, tuple):
+                stream_mode, _ = stream_event
+                logger.stream_event("received", {"mode": stream_mode})
+            else:
+                logger.stream_event("received", {"mode": "unknown"})
 
             if not isinstance(stream_event, tuple):
                 continue
@@ -426,12 +428,12 @@ async def message_generator(
                         # If we have an initial count, only take messages after that position
                         if initial_message_count > 0 and len(update_messages) > initial_message_count:
                             new_messages.extend(update_messages[initial_message_count:])
-                            logger.info(f"STREAM_FIX: Sending {len(update_messages[initial_message_count:])} new messages (skipping {initial_message_count} historical)")
+                            logger.debug(f"Sending {len(update_messages[initial_message_count:])} new messages")
                         # If no initial count or this is the first batch, check against sent_message_count
                         elif len(update_messages) > sent_message_count:
                             new_messages.extend(update_messages[sent_message_count:])
                             sent_message_count = len(update_messages)
-                            logger.info(f"STREAM_FIX: Sending {len(new_messages)} new messages")
+                            logger.debug(f"Sending {len(new_messages)} new messages")
 
             if stream_mode == "custom":
                 new_messages = [event]
@@ -445,14 +447,54 @@ async def message_generator(
             for message in new_messages:
                 if isinstance(message, tuple):
                     key, value = message
-                    # DEBUG: Log all tuple events to identify what we're missing
-                    logger.info(f"🔍 TUPLE_EVENT: key='{key}', value_type={type(value).__name__}")
                     # Skip function calling related tuples - these are internal operations, not user messages
                     if key in ['tool_calls', 'additional_kwargs', 'invalid_tool_calls']:
-                        logger.info(f"🚫 SKIPPING function call tuple: {key}")
+                        logger.debug(f"Skipping function call tuple: {key}")
+                        continue
+                    # Skip internal extraction field names that might leak from structured output
+                    # These are field names from our data models that shouldn't appear in user stream
+                    extraction_fields = [
+                        # Interview fields
+                        'client_name', 'company_name', 'preferred_name', 'industry', 'specialty', 
+                        'career_highlight', 'client_outcomes', 'specialized_skills', 'awards_media',
+                        'published_content', 'notable_partners',
+                        # ICP fields
+                        'icp_nickname', 'icp_role_identity', 'icp_context_scale', 'icp_industry_sector_context',
+                        'icp_demographics', 'icp_interests', 'icp_values', 'icp_golden_insight',
+                        # Pain fields
+                        'pain1_symptom', 'pain1_struggle', 'pain1_cost', 'pain1_consequence',
+                        'pain2_symptom', 'pain2_struggle', 'pain2_cost', 'pain2_consequence',
+                        'pain3_symptom', 'pain3_struggle', 'pain3_cost', 'pain3_consequence',
+                        # Deep Fear fields
+                        'deep_fear', 'golden_insight',
+                        # Payoffs fields
+                        'payoff1_objective', 'payoff1_desire', 'payoff1_without', 'payoff1_resolution',
+                        'payoff2_objective', 'payoff2_desire', 'payoff2_without', 'payoff2_resolution',
+                        'payoff3_objective', 'payoff3_desire', 'payoff3_without', 'payoff3_resolution',
+                        # Signature Method fields
+                        'method_name', 'sequenced_principles', 'principle_descriptions', 'principles',
+                        # Mistakes fields
+                        'mistakes',
+                        # Prize fields
+                        'prize_statement', 'prize_category', 'refined_prize',
+                        # Social Pitch fields - NAME
+                        'user_name', 'user_position',
+                        # Social Pitch fields - SAME
+                        'business_category', 'target_customer', 'same_statement',
+                        # Social Pitch fields - FAME
+                        'fame_tier', 'fame_statement', 'achievement_details',
+                        # Social Pitch fields - PAIN
+                        'ideal_clients', 'broad_challenge', 'pain_statement',
+                        # Social Pitch fields - AIM
+                        'current_project_category', 'project_description', 'aim_statement',
+                        # Social Pitch fields - GAME
+                        'vision_approach', 'bigger_vision', 'game_statement',
+                    ]
+                    if key in extraction_fields:
+                        logger.debug(f"Skipping internal extraction field: {key}")
                         continue
                     # Store parts in temporary dict
-                    logger.info(f"✅ KEEPING tuple: {key}")
+                    logger.debug(f"Processing tuple: {key}")
                     current_message[key] = value
                 else:
                     # Add complete message if we have one in progress
@@ -479,6 +521,45 @@ async def message_generator(
                         if message.tool_calls or message.invalid_tool_calls:
                             logger.info(f"🚫 SKIPPING internal tool_call message: {repr(message)}")
                             continue
+                    
+                    # Skip messages that appear to be internal data extraction results
+                    # These might have content but are from structured output calls
+                    if isinstance(message, AIMessage) and message.content:
+                        # Check if content looks like field names or extracted data
+                        content_lower = message.content.lower() if isinstance(message.content, str) else ""
+                        extraction_fields = [
+                            # Interview fields
+                            'client_name', 'company_name', 'preferred_name', 'industry', 'specialty', 
+                            'career_highlight', 'client_outcomes', 'specialized_skills', 'awards_media',
+                            'published_content', 'notable_partners',
+                            # ICP fields
+                            'icp_nickname', 'icp_role_identity', 'icp_context_scale', 'icp_industry_sector_context',
+                            'icp_demographics', 'icp_interests', 'icp_values', 'icp_golden_insight',
+                            # Pain fields
+                            'pain1_symptom', 'pain1_struggle', 'pain1_cost', 'pain1_consequence',
+                            'pain2_symptom', 'pain2_struggle', 'pain2_cost', 'pain2_consequence',
+                            'pain3_symptom', 'pain3_struggle', 'pain3_cost', 'pain3_consequence',
+                            # Deep Fear fields
+                            'deep_fear', 'golden_insight',
+                            # Payoffs fields
+                            'payoff1_objective', 'payoff1_desire', 'payoff1_without', 'payoff1_resolution',
+                            'payoff2_objective', 'payoff2_desire', 'payoff2_without', 'payoff2_resolution',
+                            'payoff3_objective', 'payoff3_desire', 'payoff3_without', 'payoff3_resolution',
+                            # Signature Method fields
+                            'method_name', 'sequenced_principles', 'principle_descriptions', 'principles',
+                            # Mistakes fields
+                            'mistakes',
+                            # Prize fields
+                            'prize_statement', 'prize_category', 'refined_prize',
+                            # Social Pitch fields
+                            'user_name', 'user_position', 'business_category', 'target_customer', 
+                            'same_statement', 'fame_tier', 'fame_statement', 'achievement_details',
+                            'ideal_clients', 'broad_challenge', 'pain_statement', 'current_project_category',
+                            'project_description', 'aim_statement', 'vision_approach', 'bigger_vision', 'game_statement',
+                        ]
+                        if any(field in content_lower for field in extraction_fields):
+                            logger.debug(f"Skipping potential extraction data message: {message.content[:50]}...")
+                            continue
 
                     logger.info(f"🔧 CONVERTING message type: {type(message).__name__}")
                     chat_message = langchain_to_chat_message(message)
@@ -499,7 +580,10 @@ async def message_generator(
                 if not user_input.stream_tokens:
                     continue
                 msg, metadata = event
-                if "skip_stream" in metadata.get("tags", []):
+                # Skip messages with internal tags
+                tags = metadata.get("tags", [])
+                if any(tag in tags for tag in ["skip_stream", "internal_extraction", "do_not_stream", "internal_decision"]):
+                    logger.debug(f"Skipping message with internal tags: {tags}")
                     continue
                 # Only process AIMessageChunk for token streaming
                 if not isinstance(msg, AIMessageChunk):
@@ -511,11 +595,7 @@ async def message_generator(
                     # So we only print non-empty content.
                     yield f"data: {json.dumps({'type': 'token', 'content': convert_message_content_to_string(content)})}\n\n"
     except Exception as e:
-        logger.error(f"=== STREAM_ERROR: run_id={run_id} ===")
-        logger.error(f"STREAM_ERROR: {str(e)}")
-        logger.error(f"STREAM_ERROR: agent_id={agent_id}")
-        logger.error(f"STREAM_ERROR: user_id={user_input.user_id}")
-        logger.error(f"STREAM_ERROR: thread_id={user_input.thread_id}")
+        logger.error(f"[STREAM ERROR] {str(e)} (run_id={run_id}, agent={agent_id})")
         yield f"data: {json.dumps({'type': 'error', 'content': 'Internal server error'})}\n\n"
     finally:
         # Always send section data at the end of the stream
@@ -537,9 +617,7 @@ async def message_generator(
             logger.error(f"Error getting section data: {e}")
 
         # Log stream completion
-        logger.info(f"=== STREAM_COMPLETE: run_id={run_id} ===")
-        logger.info(f"STREAM_COMPLETE: agent_id={agent_id}")
-        logger.info(f"STREAM_COMPLETE: thread_id={kwargs['config']['configurable']['thread_id']}")
+        logger.info(f"[STREAM] Complete: agent={agent_id}, thread={kwargs['config']['configurable']['thread_id'][:8]}...")
         
         yield "data: [DONE]\n\n"
 

@@ -417,7 +417,13 @@ async def chat_agent_node(state: SocialPitchState, config: RunnableConfig) -> So
             )
         
         logger.info("=== CALLING LLM WITH FUNCTION CALLING METHOD (Social Pitch) ===")
-        llm_output = await structured_llm.ainvoke(messages)
+        # Use non-streaming config with tags to prevent decision data from appearing in user stream
+        non_streaming_config = RunnableConfig(
+            configurable={"stream": False},
+            tags=["internal_decision", "do_not_stream"],
+            callbacks=[]
+        )
+        llm_output = await structured_llm.ainvoke(messages, config=non_streaming_config)
 
         # DEBUG: Log the COMPLETE LLM output
         logger.info("=== LLM_OUTPUT_DEBUG (Social Pitch) ===")
@@ -706,7 +712,12 @@ async def memory_updater_node(state: SocialPitchState, config: RunnableConfig) -
                 
                 # 4. Invoke the LLM to get a structured Pydantic object directly
                 logger.info(f"EXTRACTION_DEBUG: Calling LLM with structured_output for {extraction_model.__name__}.")
-                extracted_data = await structured_llm.ainvoke(extraction_prompt)
+                # Use non-streaming config with tags to prevent extraction data from appearing in user stream
+                non_streaming_config = RunnableConfig(
+                    configurable={"stream": False},
+                    tags=["internal_extraction", "do_not_stream"]
+                )
+                extracted_data = await structured_llm.ainvoke(extraction_prompt, config=non_streaming_config)
                 logger.info(f"EXTRACTION_DEBUG: Successfully extracted structured data for Social Pitch {current_section.value}: {extracted_data}")
 
                 # 5. Safely update pitch_data with the extracted, validated data

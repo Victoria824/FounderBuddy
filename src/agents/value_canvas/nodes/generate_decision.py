@@ -86,9 +86,15 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
             )
         
         logger.info("DECISION_DEBUG: About to call LLM")
+        # Use non-streaming config with tags to prevent decision data from appearing in user stream
+        non_streaming_config = RunnableConfig(
+            configurable={"stream": False},
+            tags=["internal_decision", "do_not_stream"],
+            callbacks=[]
+        )
         decision = await structured_llm.ainvoke(
             decision_prompt,
-            config={"callbacks": []}  # Disable streaming for this call
+            config=non_streaming_config
         )
         logger.info(f"DECISION_DEBUG: LLM returned decision type: {type(decision)}")
         logger.info(f"DECISION_DEBUG: Decision fields: {decision.__dict__ if hasattr(decision, '__dict__') else decision}")
