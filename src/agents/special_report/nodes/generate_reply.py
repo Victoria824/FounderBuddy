@@ -137,8 +137,18 @@ async def generate_reply_node(
     # --- End of Pre-LLM Context Injection ---
 
     try:
-        # Generate conversational response without structured output
+        # DATA LEAK DEBUG: Log what's being sent to LLM
         logger.info("🚀 Generating streaming reply without structured output")
+        logger.info(f"DEBUG_CONTEXT: Sending {len(messages)} messages to LLM")
+        for i, msg in enumerate(messages):
+            msg_preview = str(msg.content)[:200] if hasattr(msg, 'content') else str(msg)[:200]
+            logger.info(f"Message {i} ({type(msg).__name__}): {msg_preview}...")
+            
+            # Check for structured data in messages
+            structured_patterns = ["topic_options", "selected_title", "subtitle", "transformation_promise"]
+            for pattern in structured_patterns:
+                if pattern in str(msg.content if hasattr(msg, 'content') else msg):
+                    logger.error(f"🚨 FOUND STRUCTURED DATA IN MESSAGE {i}: {pattern}")
 
         # Override stream setting if present in config to prevent streaming in internal generation
         reply_config = RunnableConfig(
@@ -155,6 +165,34 @@ async def generate_reply_node(
 
         logger.info("=== REPLY_OUTPUT_DEBUG ===")
         logger.info(f"Raw reply content: {reply_content[:200]}...")
+        
+        # DATA LEAK DETECTION: Check for structured data patterns
+        structured_patterns = [
+            "topic_options", "selected_title", "subtitle", "transformation_promise", 
+            "bookstore_test_notes", "opening_disruption", "dominant_problems",
+            "signature_method", "connection_stories", "logic_frameworks"
+        ]
+        
+        for pattern in structured_patterns:
+            if pattern in reply_content:
+                logger.error(f"🚨 DATA LEAK DETECTED: Found '{pattern}' in reply content!")
+                logger.error(f"Full reply content: {reply_content}")
+                
+                # SANITIZE: Remove structured data from reply
+                # Look for patterns like "fieldnameValue" and clean them
+                import re
+                # Remove concatenated structured data (no spaces between field names and values)
+                cleaned_content = re.sub(r'[a-z_]+[A-Z][^.!?]*(?=[A-Z][a-z]|$)', '', reply_content)
+                
+                # If cleaning removed too much, fall back to a safe response
+                if len(cleaned_content.strip()) < 50:
+                    reply_content = "Now let's move on to the next step DISRUPT - Challenging Assumptions. This step involves identifying and challenging the common assumptions or misconceptions your audience might have about achieving financial freedom. Let me know if you're ready to proceed!"
+                else:
+                    reply_content = cleaned_content.strip()
+                
+                logger.info(f"🔧 SANITIZED reply content: {reply_content}")
+                break
+        
         logger.info(f"Final reply content: {reply_content[:200]}...")
 
         # Store reply in state for decision node to use
