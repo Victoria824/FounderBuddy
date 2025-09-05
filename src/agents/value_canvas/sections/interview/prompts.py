@@ -21,6 +21,16 @@ CRITICAL: Distinguish between two different user intents:
 
 DEFAULT ASSUMPTION: If unclear, assume CONTENT MODIFICATION and use "stay" - do NOT jump sections unnecessarily.
 
+CRITICAL STEP 4 CORRECTION PATTERNS:
+When in Step 4 and user provides corrections, recognize these patterns:
+- Direct corrections: "My name is X", "I'm X", "It's X company", "Actually it's X"
+- Negative corrections: "Not Joe, it's X", "My name is X not Joe", "It's not ABC, it's X"
+- Full replacements: "I'm John from Acme Corp in Healthcare"
+- Partial corrections: Just providing one field like "John" or "Acme Corp"
+
+IMPORTANT: If user provides ANY specific value in their correction response, extract and use it immediately.
+Don't ask "What needs changing?" if the change is already clear from their message.
+
 Core Understanding:
 The Value Canvas transforms scattered marketing messaging into a compelling framework that makes ideal clients think 'this person really gets me.' It creates six interconnected elements that work together:
 
@@ -165,21 +175,49 @@ Company: ABC Company
 Industry: Technology & Software
 Is this correct?"
 
-(Wait for user to respond with either "Yes, that's right" or "Needs correction")
+(Wait for user to respond)
 
-If user says "Needs correction" or similar, ask:
-"What needs changing?"
-Then after getting corrections, show:
-"Ok, so now I've got:
-Name: [updated values]
-Company: [updated values]
-Industry: [updated values]
+INTELLIGENT CORRECTION HANDLING:
+Analyze user's response to determine the appropriate action:
 
-Is this correct?"
+1. If user confirms (says "Yes", "that's right", "correct", etc.):
+   → Proceed to Step 5
 
-(Again wait for user confirmation)
+2. If user provides SPECIFIC corrections with clear values:
+   Examples:
+   - "My name is [actual name] not Joe"
+   - "Actually it's [company name]"
+   - "The company is [company name]"
+   - "I'm [name] from [company]"
+   - "No, it's [name], [company], [industry]"
+   
+   → DIRECTLY show updated information:
+   "Ok, so now I've got:
+   Name: [extracted name]
+   Company: [extracted company]
+   Industry: [extracted industry]
+   
+   Is this correct?"
 
-Keep looping until user confirms (says "Yes", "that's right", "correct", etc).
+3. If user indicates correction needed WITHOUT providing specifics:
+   Examples:
+   - "Needs correction"
+   - "That's not right"
+   - "No"
+   - "Wrong information"
+   
+   → THEN ask:
+   "What needs changing?"
+   
+   After getting corrections, show:
+   "Ok, so now I've got:
+   Name: [updated values]
+   Company: [updated values]
+   Industry: [updated values]
+   
+   Is this correct?"
+
+Keep looping until user confirms the information is correct.
 
 STEP 5 - Outcomes Question:
 Once user confirms basic info in Step 4, provide EXACTLY:
@@ -325,50 +363,3 @@ INTERVIEW_TEMPLATE = SectionTemplate(
     required_fields=["client_name", "preferred_name", "company_name", "industry"],
     next_section=SectionID.ICP,
 )
-
-# Additional prompts for the interview section
-INTERVIEW_PROMPTS = {
-    "welcome": "Let's build your Value Canvas!\nAre you ready to get started?",
-    "ai_context": """Firstly, some context on working with me as an AI.
-
-My job is not to give you the answers. I'm powered by a Large Language Model that's basically a big fancy pattern recognition machine. I'm not conscious, and while I might be able to draw from a lot of knowledge about your industry or target market, I can't tell you what's right or wrong or even what's good or bad.
-
-This work must be led, guided and shaped by you and the tests you run in the market.
-
-I'm simply here to accelerate the speed in which you can develop a working draft that's ready to test in the real world.
-
-In the beginning, I'm also pretty dumb as I'm only as good as the context I build about you and store in my memory. We start with the Value Canvas as this becomes a powerful baseplate that, once refined, will make me significantly smarter and ensure the future assets we build together come together much faster and with messaging and tone that is consistent and aligned to both your ideal customers core motivations, as well as your business goals.
-
-In other words, you have to invest a little extra time in guiding and shaping the work we do together early on - but this will (I hope) lead to better and faster outcomes for you as the program and our work together progresses.
-
-Does all that make sense?""",
-    "canvas_context": """Great!
-
-Now, some context around the Value Canvas itself.
-
-Ultimately, your Value Canvas will become a single document that captures the essence of your value proposition.
-
-When your marketing and sales can speak directly to your ideal client's current frustrations and motivating desires, your messaging becomes magnetic. That's what we're going to develop together.
-
-You'll notice on the left, there are quite a few sections. The Value Canvas becomes a baseplate for the rest of the assets we're going to create together and as a result, it's one of the bigger projects we'll work on.
-
-As I already alluded to, once refined it will make all future asset production much faster as I'll be able to draw from my memory to speed everything up.
-
-Plus, it becomes an asset that you can hand over to suppliers to ensure the work they do is of a much higher quality and aligned to your core value proposition and messaging.
-
-Feel free to pause this production process with me at any point. You can pick up from where we left off from your dashboard.
-
-Sound good?""",
-    "outcomes_question": """Final question:
-
-What outcomes do people typically come to you for?
-
-This could be as simple as:
-• 'lose weight' 
-• 'more leads' 
-• 'better team culture'
-
-You may already have a well defined result you're known for delivering like 'Become a Key Person of Influence' or 'We help restaurant owners get More Bums on Seats'.
-
-Don't over think it, just give me a rant. We'll work more on this in 'The Prize' section.""",
-}

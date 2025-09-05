@@ -70,7 +70,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             directive=str(agent_out.router_directive)
         )
 
-    # Decide status based on score and directive
+    # Decide status based on satisfaction and directive
     def _status_from_output(is_satisfied, directive):
         """Return status *string* to align with get_next_unfinished_section() logic."""
         if directive == RouterDirective.NEXT:
@@ -79,7 +79,6 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             return SectionStatus.DONE.value
         return SectionStatus.IN_PROGRESS.value
 
-    # Decision tracking only in debug mode
     if not agent_out:
         logger.debug("No agent output to process")
     
@@ -89,7 +88,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
         
         computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
         
-        save_result = await save_section.ainvoke({
+        await save_section.ainvoke({
             "user_id": state["user_id"],
             "thread_id": state["thread_id"],
             "section_id": section_id,
@@ -107,7 +106,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
         if isinstance(agent_out.section_update, dict) and 'content' in agent_out.section_update:
             tiptap_doc = TiptapDocument.model_validate(agent_out.section_update['content'])
         else:
-            logger.error(f"SAVE_SECTION_DEBUG: Invalid section_update structure: {type(agent_out.section_update)}")
+            logger.error(f"Invalid section_update structure: {type(agent_out.section_update)}")
             tiptap_doc = TiptapDocument(type="doc", content=[])
         
         state["section_states"][section_id] = SectionState(
@@ -120,11 +119,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             status=_status_from_output(agent_out.is_satisfied, agent_out.router_directive),
         )
 
-        # ----------------------------------------------------------
-        # NEW: Extract Interview basics and update canvas_data
-        # This now uses a modern, reliable structured output approach.
-        # ----------------------------------------------------------
-        # Create a mapping from SectionID to the Pydantic model for structured data extraction
+        # Extract structured data and update canvas_data
         section_to_model_map = {
             SectionID.INTERVIEW: InterviewData,
             SectionID.ICP: ICPData,
@@ -143,7 +138,6 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             try:
                 # 1. Extract plain text from the Tiptap JSON content
                 plain_text = await extract_plain_text.ainvoke({"tiptap_json": agent_out.section_update['content'] if isinstance(agent_out.section_update, dict) else agent_out.section_update})
-                logger.debug(f"Extracting structured data from {current_section.value}")
                 
                 # 2. Define a simple prompt for the LLM
                 extraction_prompt = f"""
@@ -167,14 +161,13 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                     structured_llm = structured_llm.bind(max_tokens=2000)
                 
                 # 4. Invoke the LLM to get a structured Pydantic object directly
-                # IMPORTANT: Use a non-streaming config to prevent internal extraction from appearing in user stream
-                # We use a special tag to mark this as internal so it can be filtered out
+                # Use non-streaming config to prevent extraction from appearing in user stream
                 non_streaming_config = RunnableConfig(
                     configurable={"stream": False},
                     tags=["internal_extraction", "do_not_stream"]
                 )
                 extracted_data = await structured_llm.ainvoke(extraction_prompt, config=non_streaming_config)
-                logger.debug(f"Successfully extracted structured data for {current_section.value}")
+                logger.info(f"Successfully extracted structured data for {current_section.value}")
 
                 # 5. Safely update canvas_data with the extracted, validated data
                 canvas_data = state.get("canvas_data")
@@ -192,7 +185,6 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                                 if p.name and p.description
                             }
                         
-                        logger.debug(f"Mapped SignatureMethodData: {len(canvas_data.sequenced_principles or [])} principles")
                     else:
                         # Standard field mapping for other sections
                         for field, value in extracted_data.model_dump().items():
@@ -202,34 +194,25 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                     logger.memory_update(current_section.value, "canvas_data updated")
             except Exception as e:
                 logger.warning(f"Failed to extract structured data for {current_section.value}: {e}")
-        
-        # Extract plain text and update canvas data
-        # This would parse the content and update specific fields in canvas_data
-        # For example, if section is ICP, extract icp_nickname, etc.
-        
     # Handle cases where agent provides satisfaction feedback/status but no structured section_update  
     elif agent_out:
-        logger.debug("Processing satisfaction feedback without section_update")
         
         if state.get("current_section"):
-            score_section_id = state["current_section"].value
+            current_section_id = state["current_section"].value
             # Only proceed if there's satisfaction feedback to save OR router directive is NEXT.
             if agent_out.is_satisfied is None and agent_out.router_directive != RouterDirective.NEXT:
-                logger.debug(f"No satisfaction feedback for {score_section_id}, skipping save")
                 return state
 
             # We have satisfaction feedback, so we MUST save. We need to find the content.
             content_to_save = None
 
             # 1. Try to find content in the current state for the section
-            if score_section_id in state.get("section_states", {}) and state["section_states"][score_section_id].content:
-                logger.debug(f"Found existing content for {score_section_id}")
+            if current_section_id in state.get("section_states", {}) and state["section_states"][current_section_id].content:
                 # The content in state should now be the correct Tiptap document
-                content_to_save = state["section_states"][score_section_id].content.content.model_dump()
+                content_to_save = state["section_states"][current_section_id].content.content.model_dump()
             
             # 2. If not in state, recover from previous message history with improved logic
             if not content_to_save:
-                logger.debug(f"Recovering content for {score_section_id} from history")
                 messages = state.get("messages", [])
                 summary_text = None
                 # Search backwards through the message history to find the last summary message.
@@ -239,21 +222,19 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                         content_lower = msg.content.lower()
                         if "summary" in content_lower and ("satisfied" in content_lower or "rate 0-5" in content_lower):
                             summary_text = msg.content
-                            logger.debug("Found summary message in history")
                             break
                 
                 if summary_text:
-                    logger.debug("Converting recovered text to Tiptap format")
                     content_to_save = await create_tiptap_content.ainvoke({"text": summary_text})
                 else:
-                    logger.error(f"Could not recover summary for {score_section_id}")
+                    logger.error(f"Could not recover summary for {current_section_id}")
 
             # 3. If we found content (either from state or recovery), proceed with saving.
             if content_to_save:
                 computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
                 # Log save operation
                 logger.save_operation(
-                    section=score_section_id,
+                    section=current_section_id,
                     status="satisfied" if agent_out.is_satisfied else "pending",
                     has_content=True
                 )
@@ -261,7 +242,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 await save_section.ainvoke({
                     "user_id": state["user_id"],
                     "thread_id": state["thread_id"],
-                    "section_id": score_section_id,
+                    "section_id": current_section_id,
                     "content": content_to_save,
                     "satisfaction_feedback": agent_out.user_satisfaction_feedback,
                     "status": computed_status,
@@ -274,8 +255,8 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 else:
                     tiptap_doc = content_to_save
                 
-                state.setdefault("section_states", {})[score_section_id] = SectionState(
-                    section_id=SectionID(score_section_id),
+                state.setdefault("section_states", {})[current_section_id] = SectionState(
+                    section_id=SectionID(current_section_id),
                     content=SectionContent(
                         content=tiptap_doc,
                         plain_text=None
@@ -287,13 +268,12 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                 # 4. If content recovery failed, check if we should still update status
                 if agent_out.router_directive == RouterDirective.NEXT:
                     # User wants to proceed, mark section as DONE even without content
-                    logger.debug(f"Marking {score_section_id} as DONE (router_directive=NEXT)")
                     
                     computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
                     
                     # Create minimal section state with DONE status
-                    state.setdefault("section_states", {})[score_section_id] = SectionState(
-                        section_id=SectionID(score_section_id),
+                    state.setdefault("section_states", {})[current_section_id] = SectionState(
+                        section_id=SectionID(current_section_id),
                         content=SectionContent(
                             content=TiptapDocument(type="doc", content=[]),  # Empty content
                             plain_text=None
@@ -301,10 +281,10 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                         satisfaction_feedback=agent_out.user_satisfaction_feedback,
                         status=computed_status,  # Will be DONE because of router_directive == NEXT
                     )
-                    logger.save_operation(score_section_id, "done", has_content=False)
+                    logger.save_operation(current_section_id, "done", has_content=False)
                 else:
                     # Not moving next and no content, cannot update
-                    logger.error(f"Cannot save {score_section_id}: missing content")
+                    logger.error(f"Cannot save {current_section_id}: missing content")
 
         else:
             logger.warning("Cannot update section state: missing context")

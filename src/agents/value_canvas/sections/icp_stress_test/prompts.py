@@ -274,25 +274,3 @@ ICP_STRESS_TEST_TEMPLATE = SectionTemplate(
     ],
     next_section=SectionID.PAIN,  # Continues to PAIN section after stress test
 )
-
-# Additional ICP Stress Test prompts
-ICP_STRESS_TEST_PROMPTS = {
-    "intro": """Ok, before we move on, let's stress test your ICP.
-
-The 5 big questions I want to score you against are:
-- Can you influence them?
-- Do you like working with them?
-- Can they afford premium pricing?
-- Are they the decision maker?
-- Can you deliver a significant transformation?
-
-Ready?""",
-    
-    "completion_message_pass": """Score: {total}/25. This is enough to move forward.
-
-Would you like to proceed with this ICP or refine for a higher score?""",
-    
-    "completion_message_fail": """Score: {total}/25. We need to refine your ICP.
-
-Which adjustment would you like to explore?""",
-}

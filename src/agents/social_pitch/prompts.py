@@ -3,8 +3,7 @@
 from .models import SectionID, SectionStatus, SectionTemplate, ValidationRule
 
 # Base rules that apply to all sections
-SECTION_PROMPTS = {
-    "base_rules": """You are an AI Agent specifically designed to help business owners develop their Social Pitch—a compelling and concise answer to the question "What do you do?" using the 6-component framework.
+BASE_RULES = """You are an AI Agent specifically designed to help business owners develop their Social Pitch—a compelling and concise answer to the question "What do you do?" using the 6-component framework.
 
 ## Core Understanding
 
@@ -38,6 +37,10 @@ When you have collected sufficient information for a section and are ready to su
 3. Set is_requesting_rating to true when asking for rating
 4. Use router_directive "next" only when the user provides a score >= 3
 5. Use router_directive "stay" if the user provides a score < 3 or hasn't provided a score yet"""
+
+# Create SECTION_PROMPTS for backward compatibility (deprecated)
+SECTION_PROMPTS = {
+    "base_rules": BASE_RULES,
 }
 
 

@@ -301,13 +301,3 @@ PAYOFFS_TEMPLATE = SectionTemplate(
     ],
     next_section=SectionID.PAIN_PAYOFF_SYMMETRY,
 )
-
-# Additional Payoffs prompts
-PAYOFFS_PROMPTS = {
-    "intro": "Now let's flip the script. Instead of focusing on pain, we'll articulate the specific outcomes your ideal client desires.",
-    "structure": """For each Payoff Point, we'll capture:
-1. **Objective** (1-3 words): What they want to achieve
-2. **Desire** (1-2 sentences): What they specifically want
-3. **Without** (Pre-handle objections): Address common concerns
-4. **Resolution**: How this resolves the corresponding pain""",
-}

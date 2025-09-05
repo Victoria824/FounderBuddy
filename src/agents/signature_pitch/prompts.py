@@ -61,9 +61,12 @@ def get_next_unfinished_section(section_states: dict[str, Any]) -> SignaturePitc
     return None
 
 
+# Base rules for Signature Pitch agent
+BASE_RULES = """This agent now uses the CAPSTONE Framework. Please see capstone_templates.py for the complete 8-step framework."""
+
 # Legacy compatibility exports for backward compatibility during transition
 SECTION_PROMPTS = {
-    "base_rules": """This agent now uses the CAPSTONE Framework. Please see capstone_templates.py for the complete 8-step framework."""
+    "base_rules": BASE_RULES
 }
 
 # Export the main template access for the agent
@@ -73,5 +76,6 @@ __all__ = [
     "get_section_order",
     "get_next_section",
     "get_next_unfinished_section",
+    "BASE_RULES",
     "SECTION_PROMPTS",  # Legacy compatibility
 ]

@@ -3,20 +3,21 @@
 from typing import Any
 
 from .enums import SectionID, SectionStatus
-from .sections import (
-    SECTION_PROMPTS as SECTION_PROMPTS_DICT,
-)
 
 # Import everything from the sections module
 from .sections import (
+    BASE_RULES,
     SECTION_TEMPLATES,
 )
 
 # Re-export SECTION_TEMPLATES for backward compatibility
 # (It's already in the correct format from sections/__init__.py)
 
-# Re-export SECTION_PROMPTS with base_rules for backward compatibility
-SECTION_PROMPTS = SECTION_PROMPTS_DICT
+# Create SECTION_PROMPTS for backward compatibility
+# This will be deprecated - use BASE_RULES directly instead
+SECTION_PROMPTS = {
+    "base_rules": BASE_RULES,
+}
 
 
 def get_progress_info(section_states: dict[str, Any]) -> dict[str, Any]:

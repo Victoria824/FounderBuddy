@@ -148,17 +148,3 @@ SIGNATURE_METHOD_TEMPLATE = SectionTemplate(
     required_fields=["method_name", "sequenced_principles", "principle_descriptions"],
     next_section=SectionID.MISTAKES,
 )
-
-# Additional Signature Method prompts
-SIGNATURE_METHOD_PROMPTS = {
-    "intro": "Your Signature Method is your intellectual property - the unique approach that bridges the gap between your client's pain and their desired payoffs.",
-    "structure": """We'll create:
-1. **Method Name**: A memorable 2-4 word name for your approach
-2. **Core Principles**: 4-6 principles that guide your method""",
-    "examples": """Example Method Names:
-- "The Clarity Framework"
-- "Revenue Architecture"
-- "The Growth Flywheel"
-- "Strategic Momentum Method"
-- "The Scale System\"""",
-}

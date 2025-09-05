@@ -156,16 +156,3 @@ PAIN_PAYOFF_SYMMETRY_TEMPLATE = SectionTemplate(
     ],
     next_section=SectionID.SIGNATURE_METHOD,
 )
-
-# Additional Pain-Payoff Symmetry prompts
-PAIN_PAYOFF_SYMMETRY_PROMPTS = {
-    "intro": """Before we move on, I want to reflect on the work you've done and the psychological principles behind the structure.
-
-My goal is to help you understand the nuance so when presenting in the real world, you have context around the key elements.
-
-Ready?""",
-    
-    "completion_check": """Do you have any questions, or are you happy to move on?""",
-    
-    "follow_up": """Any other questions, or shall we continue?""",
-}

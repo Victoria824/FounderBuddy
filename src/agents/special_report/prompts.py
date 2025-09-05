@@ -11,9 +11,13 @@ from .framework_prompts import (
     get_next_unfinished_section as get_framework_next_unfinished_section,
 )
 
+# Base rules for Special Report agent
+BASE_RULES = """This agent uses the 7-Step Special Report Framework. Please see framework_templates.py for the complete 7-step framework."""
+
 # Use framework templates and functions
+# Create SECTION_PROMPTS for backward compatibility (deprecated)
 SECTION_PROMPTS = {
-    "base_rules": """This agent uses the 7-Step Special Report Framework. Please see framework_templates.py for the complete 7-step framework."""
+    "base_rules": BASE_RULES
 }
 
 

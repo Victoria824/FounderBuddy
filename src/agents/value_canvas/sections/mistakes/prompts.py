@@ -135,20 +135,3 @@ MISTAKES_TEMPLATE = SectionTemplate(
     required_fields=["mistakes"],
     next_section=SectionID.PRIZE,
 )
-
-# Additional Mistakes prompts
-MISTAKES_PROMPTS = {
-    "intro": "Now let's identify the key mistakes that keep your ideal client stuck despite their best efforts.",
-    "structure": """For each Signature Method principle, we'll identify:
-• Error in Thinking: The flawed belief that keeps them stuck
-• Error in Action: The counterproductive action that feels right but backfires""",
-    "examples": """Example Mistakes:
-- Error in Thinking: "More features will attract more customers"
-  Error in Action: Adding complexity instead of focusing on core value
-  
-- Error in Thinking: "I need to be available 24/7 to be valuable"
-  Error in Action: Saying yes to everything, leading to burnout
-  
-- Error in Thinking: "If I just work harder, results will come"
-  Error in Action: Increasing effort without changing strategy""",
-}

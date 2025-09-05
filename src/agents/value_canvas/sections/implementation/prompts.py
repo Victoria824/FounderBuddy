@@ -45,23 +45,3 @@ IMPLEMENTATION_TEMPLATE = SectionTemplate(
     next_section=None,
 )
 
-# Additional Implementation prompts
-IMPLEMENTATION_PROMPTS = {
-    "intro": "Congratulations! You've completed your Value Canvas framework.",
-    "summary": """Here's your complete Value Canvas summary:
-
-PRIZE: {{refined_prize}}
-
-PAINS → PAYOFFS:
-- {{pain1_symptom}} → {{payoff1_objective}}
-- {{pain2_symptom}} → {{payoff2_objective}}
-- {{pain3_symptom}} → {{payoff3_objective}}
-
-SIGNATURE METHOD: {{method_name}}""",
-    "guidance": """Implementation Guidance:
-1. Brief writers, designers, and team members using this framework
-2. Test messaging components in real conversations with prospects
-3. Audit existing marketing assets against this new messaging backbone
-4. Integrate these elements into sales conversations and presentations
-5. Schedule quarterly reviews to refine based on market feedback""",
-}

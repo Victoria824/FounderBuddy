@@ -219,13 +219,3 @@ PAIN_TEMPLATE = SectionTemplate(
     ],
     next_section=SectionID.DEEP_FEAR,
 )
-
-# Additional Pain prompts
-PAIN_PROMPTS = {
-    "intro": """Now let's identify what keeps your ideal client up at night. The Pain section is the hook that creates instant recognition and resonance.""",
-    "structure": """For each Pain Point, we'll capture four essential elements:
-1. **Symptom** (1-3 words): The observable problem
-2. **Struggle** (1-2 sentences): How this shows up in their daily work life
-3. **Cost** (Immediate impact): What it's costing them right now
-4. **Consequence** (Future impact): What happens if they don't solve this""",
-}

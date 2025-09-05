@@ -148,20 +148,3 @@ PRIZE_TEMPLATE = SectionTemplate(
     required_fields=["prize_statement"],
     next_section=SectionID.IMPLEMENTATION,
 )
-
-# Additional Prize prompts
-PRIZE_PROMPTS = {
-    "intro": "The Prize is your magnetic north star - a 1-5 word transformation promise that captures the ultimate outcome.",
-    "categories": """Prize Categories:
-1. **Identity-Based**: Who they become (e.g., "Key Person of Influence", "Trusted Authority")
-2. **Outcome-Based**: What they achieve (e.g., "Predictable Revenue", "Effortless Scale")
-3. **Freedom-Based**: Liberation from constraints (e.g., "I Don't Work Fridays", "Freedom On Two Wheels")
-4. **State-Based**: The ongoing experience (e.g., "Pain-Free Running", "Joyful Family Adventures")""",
-    "examples": """Example Prizes:
-- "Key Person of Influence"
-- "Oversubscribed"
-- "Predictable Success"
-- "Effortless Growth"
-- "Magnetic Authority"
-- "Unstoppable Momentum\"""",
-}

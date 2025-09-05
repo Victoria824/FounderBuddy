@@ -38,9 +38,9 @@ async def get_context(
         raise ValueError(f"Unknown section ID: {section_id}")
 
     # Generate system prompt with placeholder handling
-    from .prompts import SECTION_PROMPTS
+    from .prompts import BASE_RULES
 
-    base_prompt = SECTION_PROMPTS.get("base_rules", "")
+    base_prompt = BASE_RULES
     section_prompt = template  # Framework templates are direct prompt strings
 
     # Render template with canvas data if provided

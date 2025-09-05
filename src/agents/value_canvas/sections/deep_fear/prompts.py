@@ -198,9 +198,3 @@ DEEP_FEAR_TEMPLATE = SectionTemplate(
     required_fields=["deep_fear", "golden_insight"],
     next_section=SectionID.PAYOFFS,
 )
-
-# Additional Deep Fear prompts
-DEEP_FEAR_PROMPTS = {
-    "intro": """Now that we've got a first pass of the 3 big pain points, let's dig deeper. Behind every business challenge sits a more personal question—the stuff your ideal client thinks about but rarely says out loud.""",
-    "purpose": """The Deep Fear is for your understanding only. This isn't client-facing marketing material—it's a human insight that helps you communicate with genuine empathy and craft content that resonates at the right emotional depth.""",
-}

@@ -23,7 +23,7 @@ from .models import (
     SectionStatus,
     TiptapDocument,
 )
-from .prompts import SECTION_PROMPTS, SECTION_TEMPLATES
+from .sections import BASE_RULES, SECTION_TEMPLATES
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ async def get_context(
         raise ValueError(f"Unknown section ID: {section_id}")
     
     # Generate system prompt
-    base_prompt = SECTION_PROMPTS.get("base_rules", "")
+    base_prompt = BASE_RULES
     section_prompt = template.system_prompt_template
     
     # Render template with canvas data if provided

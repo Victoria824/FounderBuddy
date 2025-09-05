@@ -238,15 +238,3 @@ ICP_TEMPLATE = SectionTemplate(
     ],
     next_section=SectionID.ICP_STRESS_TEST,
 )
-
-# Additional ICP prompts
-ICP_PROMPTS = {
-    "intro": """Let me start with some context around your ICP.
-
-Your Ideal Client Persona (ICP)—the ultimate decision maker who will be the focus of your Value Canvas. Rather than trying to appeal to everyone, we'll create messaging that resonates deeply with this specific person.""",
-    "brain_dump": """The first thing I'd like you to do is to give me a brain dump of your current best thinking of who your ICP is.
-
-You may already know and have done some deep work on this in which case, this won't take long, or, you may be unsure, in which case, this process should be quite useful.
-
-Just go on a bit of a rant and I'll do my best to refine it with you if needed.""",
-}
