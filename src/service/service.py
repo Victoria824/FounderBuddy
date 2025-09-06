@@ -36,8 +36,9 @@ from agents.special_report.prompts import SECTION_TEMPLATES as SPECIAL_REPORT_TE
 from agents.value_canvas.agent import initialize_value_canvas_state
 from agents.value_canvas.prompts import SECTION_TEMPLATES as VALUE_CANVAS_TEMPLATES
 from core import settings
+from core.settings import DatabaseType
 from integrations.dentapp.dentapp_utils import SECTION_ID_MAPPING
-from memory import initialize_database, initialize_store
+from memory import initialize_database, initialize_store, pg_manager
 from schema import (
     ChatHistory,
     ChatHistoryInput,
@@ -172,24 +173,43 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     based on settings.
     """
     try:
-        # Initialize both checkpointer (for short-term memory) and store (for long-term memory)
-        async with initialize_database() as saver, initialize_store() as store:
-            # Set up both components
-            if hasattr(saver, "setup"):  # ignore: union-attr
-                await saver.setup()
-            # Only setup store for Postgres as InMemoryStore doesn't need setup
-            if hasattr(store, "setup"):  # ignore: union-attr
-                await store.setup()
-
-            # Configure agents with both memory components
+        if settings.DATABASE_TYPE == DatabaseType.POSTGRES:
+            # 初始化PostgreSQL连接池
+            await pg_manager.setup()
+            saver = pg_manager.get_saver()
+            store = pg_manager.get_store()
+            
+            # 配置所有agents
             agents = get_all_agent_info()
             for a in agents:
                 agent = get_agent(a.key)
-                # Set checkpointer for thread-scoped memory (conversation history)
                 agent.checkpointer = saver
-                # Set store for long-term memory (cross-conversation knowledge)
                 agent.store = store
+            
+            logger.info("Application startup complete with PostgreSQL connection pool")
             yield
+            
+            # 清理连接池
+            await pg_manager.cleanup()
+        else:
+            # SQLite或MongoDB - 使用原有的逻辑
+            async with initialize_database() as saver, initialize_store() as store:
+                # Set up both components
+                if hasattr(saver, "setup"):  # ignore: union-attr
+                    await saver.setup()
+                # Only setup store for Postgres as InMemoryStore doesn't need setup
+                if hasattr(store, "setup"):  # ignore: union-attr
+                    await store.setup()
+
+                # Configure agents with both memory components
+                agents = get_all_agent_info()
+                for a in agents:
+                    agent = get_agent(a.key)
+                    # Set checkpointer for thread-scoped memory (conversation history)
+                    agent.checkpointer = saver
+                    # Set store for long-term memory (cross-conversation knowledge)
+                    agent.store = store
+                yield
     except Exception as e:
         logger.error(f"Error during database/store initialization: {e}")
         raise
