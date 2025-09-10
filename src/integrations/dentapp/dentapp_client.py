@@ -16,11 +16,7 @@ class DentAppClient:
     def __init__(self, base_url: str = None, timeout: int = 30):
         self.base_url = base_url or getattr(settings, 'DENTAPP_API_URL', 'https://dentappaibuilder.enspirittech.co.uk')
         self.timeout = timeout
-        self._client: AsyncClient | None = None
-        logger.info(f"=== DENTAPP_CLIENT_INIT: Initialized with base_url={self.base_url}, timeout={timeout}s ===")
-        
-    async def __aenter__(self):
-        """Async context manager entry."""
+        # Initialize the client immediately instead of waiting for __aenter__
         self._client = AsyncClient(
             base_url=self.base_url,
             timeout=self.timeout,
@@ -29,6 +25,11 @@ class DentAppClient:
                 "Accept": "application/json"
             }
         )
+        logger.info(f"=== DENTAPP_CLIENT_INIT: Initialized with base_url={self.base_url}, timeout={timeout}s ===")
+        
+    async def __aenter__(self):
+        """Async context manager entry."""
+        # Client is already initialized in __init__
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):

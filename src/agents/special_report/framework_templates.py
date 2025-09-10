@@ -7,6 +7,7 @@ primes them for sales conversations, and overcomes objections through thought le
 from typing import Any
 
 from .enums import SectionStatus, SpecialReportSection
+from .models import SectionTemplate
 
 # Step 1: ATTRACT - Create compelling, transformation-focused topic
 ATTRACT_TEMPLATE = """
@@ -240,15 +241,86 @@ Contact Method: {contact_method}
 Begin by clarifying what specific action they want readers to take next.
 """
 
-# Framework template registry
+# Create SectionTemplate objects for each section
+ATTRACT_TEMPLATE_OBJ = SectionTemplate(
+    section_id=SpecialReportSection.ATTRACT,
+    name="ATTRACT - Compelling Topic",
+    description="Create a compelling, transformation-focused topic for the report",
+    system_prompt_template=ATTRACT_TEMPLATE,
+    validation_rules=[],
+    required_fields=[],
+    next_section=SpecialReportSection.DISRUPT
+)
+
+DISRUPT_TEMPLATE_OBJ = SectionTemplate(
+    section_id=SpecialReportSection.DISRUPT,
+    name="DISRUPT - Challenge Assumptions",
+    description="Write a powerful introduction that challenges assumptions and raises the stakes",
+    system_prompt_template=DISRUPT_TEMPLATE,
+    validation_rules=[],
+    required_fields=[],
+    next_section=SpecialReportSection.INFORM
+)
+
+INFORM_TEMPLATE_OBJ = SectionTemplate(
+    section_id=SpecialReportSection.INFORM,
+    name="INFORM - Explain Method",
+    description="Explain signature method and its benefits in a persuasive way",
+    system_prompt_template=INFORM_TEMPLATE,
+    validation_rules=[],
+    required_fields=[],
+    next_section=SpecialReportSection.RECOMMEND
+)
+
+RECOMMEND_TEMPLATE_OBJ = SectionTemplate(
+    section_id=SpecialReportSection.RECOMMEND,
+    name="RECOMMEND - Actionable Advice",
+    description="Provide simple, actionable advice to build immediate trust",
+    system_prompt_template=RECOMMEND_TEMPLATE,
+    validation_rules=[],
+    required_fields=[],
+    next_section=SpecialReportSection.OVERCOME
+)
+
+OVERCOME_TEMPLATE_OBJ = SectionTemplate(
+    section_id=SpecialReportSection.OVERCOME,
+    name="OVERCOME - Address Objections",
+    description="Proactively address potential objections and build confidence",
+    system_prompt_template=OVERCOME_TEMPLATE,
+    validation_rules=[],
+    required_fields=[],
+    next_section=SpecialReportSection.REINFORCE
+)
+
+REINFORCE_TEMPLATE_OBJ = SectionTemplate(
+    section_id=SpecialReportSection.REINFORCE,
+    name="REINFORCE - Lasting Impression",
+    description="Summarize the core message and leave a lasting impression",
+    system_prompt_template=REINFORCE_TEMPLATE,
+    validation_rules=[],
+    required_fields=[],
+    next_section=SpecialReportSection.INVITE
+)
+
+INVITE_TEMPLATE_OBJ = SectionTemplate(
+    section_id=SpecialReportSection.INVITE,
+    name="INVITE - Call to Action",
+    description="Guide the reader to a clear, specific call to action",
+    system_prompt_template=INVITE_TEMPLATE,
+    validation_rules=[],
+    required_fields=[],
+    next_section=None  # Last section
+)
+
+# Framework template registry - now using SectionTemplate objects
 FRAMEWORK_TEMPLATES = {
-    SpecialReportSection.ATTRACT.value: ATTRACT_TEMPLATE,
-    SpecialReportSection.DISRUPT.value: DISRUPT_TEMPLATE,
-    SpecialReportSection.INFORM.value: INFORM_TEMPLATE,
-    SpecialReportSection.RECOMMEND.value: RECOMMEND_TEMPLATE,
-    SpecialReportSection.OVERCOME.value: OVERCOME_TEMPLATE,
-    SpecialReportSection.REINFORCE.value: REINFORCE_TEMPLATE,
-    SpecialReportSection.INVITE.value: INVITE_TEMPLATE,
+    SpecialReportSection.ATTRACT.value: ATTRACT_TEMPLATE_OBJ,
+    SpecialReportSection.DISRUPT.value: DISRUPT_TEMPLATE_OBJ,
+    SpecialReportSection.INFORM.value: INFORM_TEMPLATE_OBJ,
+    SpecialReportSection.RECOMMEND.value: RECOMMEND_TEMPLATE_OBJ,
+    SpecialReportSection.OVERCOME.value: OVERCOME_TEMPLATE_OBJ,
+    SpecialReportSection.REINFORCE.value: REINFORCE_TEMPLATE_OBJ,
+    SpecialReportSection.INVITE.value: INVITE_TEMPLATE_OBJ,
 }
 
 

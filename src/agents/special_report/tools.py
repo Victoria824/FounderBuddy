@@ -41,7 +41,8 @@ async def get_context(
     from .prompts import BASE_RULES
 
     base_prompt = BASE_RULES
-    section_prompt = template  # Framework templates are direct prompt strings
+    # Extract the system_prompt_template from the SectionTemplate object
+    section_prompt = template.system_prompt_template if hasattr(template, 'system_prompt_template') else str(template)
 
     # Render template with canvas data if provided
     if canvas_data is None:

@@ -57,11 +57,20 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
             "core_credibility": 35,
             "story_spark": 36,
             "signature_line": 37,
-            # Special Report sections
+            # Special Report sections (old sections for backward compatibility)
             "topic_selection": 40,
             "content_development": 41,
             "report_structure": 42,
             "sr_implementation": 43,  # Special Report implementation
+            # Special Report sections (new 7-step framework)
+            "attract": 44,      # Step 1: Compelling topic
+            "disrupt": 45,      # Step 2: Challenge assumptions
+            "inform": 46,       # Step 3: Teach concept
+            "recommend": 47,    # Step 4: Recommend actions
+            "overcome": 48,     # Step 5: Handle objections
+            "reinforce": 49,    # Step 6: Reinforce value
+            "invite": 50,       # Step 7: Call to action
+            "implementation": 51,  # Implementation/Export
         }
         agent_id = 2  # Default to Value Canvas agent ID (will be overridden by agent-specific calls)
         logger.info("Using GSD configuration: Value Canvas (IDs 9-16, agent 2), Social Pitch (IDs 17-22, agent 3), Mission Pitch (IDs 23-31, agent 4), Signature Pitch (IDs 32-39, agent 5)")
@@ -106,11 +115,20 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
             "story_spark": 28,
             "signature_line": 29,
             "implementation": 30,  # Signature Pitch implementation
-            # Special Report sections
+            # Special Report sections (old sections for backward compatibility)
             "topic_selection": 32,
             "content_development": 33,
             "report_structure": 34,
             "sr_implementation": 35,  # Special Report implementation
+            # Special Report sections (new 7-step framework)
+            "attract": 36,      # Step 1: Compelling topic
+            "disrupt": 37,      # Step 2: Challenge assumptions
+            "inform": 38,       # Step 3: Teach concept
+            "recommend": 39,    # Step 4: Recommend actions
+            "overcome": 40,     # Step 5: Handle objections
+            "reinforce": 41,    # Step 6: Reinforce value
+            "invite": 42,       # Step 7: Call to action
+            "implementation": 43,  # Implementation/Export
         }
         agent_id = 1  # Default to Value Canvas agent ID (will be overridden by agent-specific calls)
         logger.info("Using DentApp AI Builder configuration: Value Canvas (IDs 1-8, agent 1), Social Pitch (IDs 9-14, agent 3), Mission Pitch (IDs 15-23, agent 4), Signature Pitch (IDs 24-31, agent 5), Special Report (IDs 32-35, agent 6)")
@@ -150,11 +168,20 @@ def _get_config_based_on_url() -> tuple[dict[str, int], int]:
             "story_spark": 36,
             "signature_line": 37,
             "implementation": 38,  # Signature Pitch implementation
-            # Special Report sections
+            # Special Report sections (old sections for backward compatibility)
             "topic_selection": 40,
             "content_development": 41,
             "report_structure": 42,
             "sr_implementation": 43,  # Special Report implementation
+            # Special Report sections (new 7-step framework)
+            "attract": 44,      # Step 1: Compelling topic
+            "disrupt": 45,      # Step 2: Challenge assumptions
+            "inform": 46,       # Step 3: Teach concept
+            "recommend": 47,    # Step 4: Recommend actions
+            "overcome": 48,     # Step 5: Handle objections
+            "reinforce": 49,    # Step 6: Reinforce value
+            "invite": 50,       # Step 7: Call to action
+            "implementation": 51,  # Implementation/Export
         }
         agent_id = 2  # Default to Value Canvas agent ID
         logger.warning(f"Unknown DENTAPP_API_URL: {dentapp_api_url}, using default GSD configuration")
@@ -231,7 +258,8 @@ def get_agent_id_for_section(section_id_str: str, agent_context: str = None) -> 
     
     # Special Report exclusive sections
     special_report_sections = {
-        "topic_selection", "content_development", "report_structure", "sr_implementation"
+        "topic_selection", "content_development", "report_structure", "sr_implementation",
+        "attract", "disrupt", "inform", "recommend", "overcome", "reinforce", "invite", "implementation"
     }
     
     # Handle special cases
