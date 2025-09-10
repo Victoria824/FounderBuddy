@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class PostgresConnectionManager:
-    """管理PostgreSQL连接池和相关组件的单例类"""
+    """Singleton class to manage PostgreSQL connection pool and related components"""
     
     _instance = None
     
@@ -31,26 +31,26 @@ class PostgresConnectionManager:
             self.initialized = True
     
     def get_connection_string(self) -> str:
-        """构建PostgreSQL连接字符串"""
+        """Build PostgreSQL connection string"""
         if settings.POSTGRES_PASSWORD is None:
             raise ValueError("POSTGRES_PASSWORD is not set")
         
         encoded_password = quote(settings.POSTGRES_PASSWORD.get_secret_value(), safe='')
         
-        # 检测是否使用Supabase Pooler
+        # Detect if using Supabase Pooler
         if settings.POSTGRES_HOST and "pooler.supabase.com" in settings.POSTGRES_HOST:
             logger.info("Detected Supabase Pooler, using optimized configuration")
-            # Supabase Pooler优化配置 - 注意：pgbouncer不是psycopg的参数，而是连接模式标记
+            # Supabase Pooler optimization config - Note: pgbouncer is not a psycopg parameter, but a connection mode marker
             return (
                 f"postgresql://{settings.POSTGRES_USER}:"
                 f"{encoded_password}@"
-                f"{settings.POSTGRES_HOST}:6543/"  # 使用6543端口
+                f"{settings.POSTGRES_HOST}:6543/"  # Use port 6543
                 f"{settings.POSTGRES_DB}?"
                 f"sslmode=require"
-                # prepare_threshold在connection_kwargs中设置
+                # prepare_threshold is set in connection_kwargs
             )
         else:
-            # 标准PostgreSQL连接
+            # Standard PostgreSQL connection
             return (
                 f"postgresql://{settings.POSTGRES_USER}:"
                 f"{encoded_password}@"
@@ -59,7 +59,7 @@ class PostgresConnectionManager:
             )
     
     async def setup(self):
-        """初始化连接池和相关组件"""
+        """Initialize connection pool and related components"""
         if self.pool is not None:
             logger.warning("Connection pool already initialized")
             return
@@ -69,43 +69,43 @@ class PostgresConnectionManager:
         
         logger.info("Initializing PostgreSQL connection pool...")
         
-        # 连接池配置
+        # Connection pool configuration
         connection_kwargs = {
             "autocommit": True,
             "row_factory": dict_row,
         }
         
-        # 如果是Supabase Pooler，禁用prepared statements
+        # If using Supabase Pooler, disable prepared statements
         if settings.POSTGRES_HOST and "pooler.supabase.com" in settings.POSTGRES_HOST:
-            connection_kwargs["prepare_threshold"] = None  # 完全禁用prepared statements
+            connection_kwargs["prepare_threshold"] = None  # Completely disable prepared statements
         
-        # 创建连接池 - 使用open=False避免弃用警告
+        # Create connection pool - use open=False to avoid deprecation warning
         self.pool = AsyncConnectionPool(
             conninfo=conn_string,
             min_size=2,
             max_size=10,
             timeout=30.0,
-            max_lifetime=300.0,  # 5分钟
+            max_lifetime=300.0,  # 5 minutes
             max_idle=60.0,
             kwargs=connection_kwargs,
-            open=False,  # 不在构造函数中打开连接池
+            open=False,  # Don't open connection pool in constructor
         )
         
-        # 显式打开连接池
+        # Explicitly open connection pool
         await self.pool.open()
         
-        # 初始化saver和store
+        # Initialize saver and store
         self.saver = AsyncPostgresSaver(self.pool)
         self.store = AsyncPostgresStore(self.pool)
         
-        # 设置数据库表
+        # Set up database tables
         await self.saver.setup()
         await self.store.setup()
         
         logger.info("PostgreSQL connection pool initialized successfully")
     
     async def cleanup(self):
-        """清理连接池"""
+        """Clean up connection pool"""
         if self.pool:
             logger.info("Closing PostgreSQL connection pool...")
             await self.pool.close()
@@ -115,21 +115,21 @@ class PostgresConnectionManager:
             logger.info("PostgreSQL connection pool closed")
     
     def get_saver(self) -> AsyncPostgresSaver:
-        """获取saver实例"""
+        """Get saver instance"""
         if self.saver is None:
             raise RuntimeError("Connection pool not initialized. Call setup() first.")
         return self.saver
     
     def get_store(self) -> AsyncPostgresStore:
-        """获取store实例"""
+        """Get store instance"""
         if self.store is None:
             raise RuntimeError("Connection pool not initialized. Call setup() first.")
         return self.store
 
 
-# 保留原有函数以保持兼容性
+# Keep original functions for backward compatibility
 def validate_postgres_config() -> None:
-    """验证PostgreSQL配置"""
+    """Validate PostgreSQL configuration"""
     required_vars = [
         "POSTGRES_USER",
         "POSTGRES_PASSWORD", 
@@ -148,19 +148,19 @@ def validate_postgres_config() -> None:
 
 def get_postgres_connection_string() -> str:
     """Build and return the PostgreSQL connection string from settings."""
-    # 使用连接管理器的方法
+    # Use connection manager's method
     return pg_manager.get_connection_string()
 
 
-# 全局连接管理器实例
+# Global connection manager instance
 pg_manager = PostgresConnectionManager()
 
 
 def get_postgres_saver():
-    """获取PostgreSQL saver（保持向后兼容）"""
+    """Get PostgreSQL saver (maintain backward compatibility)"""
     return pg_manager.get_saver()
 
 
 def get_postgres_store():
-    """获取PostgreSQL store（保持向后兼容）"""
+    """Get PostgreSQL store (maintain backward compatibility)"""
     return pg_manager.get_store()

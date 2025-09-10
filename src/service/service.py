@@ -174,12 +174,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     try:
         if settings.DATABASE_TYPE == DatabaseType.POSTGRES:
-            # 初始化PostgreSQL连接池
+            # Initialize PostgreSQL connection pool
             await pg_manager.setup()
             saver = pg_manager.get_saver()
             store = pg_manager.get_store()
             
-            # 配置所有agents
+            # Configure all agents
             agents = get_all_agent_info()
             for a in agents:
                 agent = get_agent(a.key)
@@ -189,10 +189,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("Application startup complete with PostgreSQL connection pool")
             yield
             
-            # 清理连接池
+            # Clean up connection pool
             await pg_manager.cleanup()
         else:
-            # SQLite或MongoDB - 使用原有的逻辑
+            # SQLite or MongoDB - use original logic
             async with initialize_database() as saver, initialize_store() as store:
                 # Set up both components
                 if hasattr(saver, "setup"):  # ignore: union-attr

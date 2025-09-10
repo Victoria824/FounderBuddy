@@ -17,7 +17,7 @@ async def initialize_database():
     Returns an initialized AsyncCheckpointer instance.
     """
     if settings.DATABASE_TYPE == DatabaseType.POSTGRES:
-        # 使用连接池管理器
+        # Use connection pool manager
         if pg_manager.pool is None:
             await pg_manager.setup()
         yield pg_manager.get_saver()
@@ -36,7 +36,7 @@ async def initialize_store():
     Returns an async context manager for the initialized store.
     """
     if settings.DATABASE_TYPE == DatabaseType.POSTGRES:
-        # 使用连接池管理器
+        # Use connection pool manager
         if pg_manager.pool is None:
             await pg_manager.setup()
         yield pg_manager.get_store()
