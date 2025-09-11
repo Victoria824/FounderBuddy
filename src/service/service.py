@@ -448,6 +448,12 @@ async def message_generator(
     sent_message_count = 0  # Track the number of messages sent to prevent duplicates
 
     try:
+        # Send metadata as the first event in the stream
+        thread_id = kwargs["config"]["configurable"]["thread_id"]
+        user_id = kwargs["config"]["configurable"]["user_id"]
+        
+        yield f"data: {json.dumps({'type': 'metadata', 'content': {'thread_id': thread_id, 'user_id': user_id, 'run_id': str(run_id)}})}\n\n"
+        
         # Process streamed events from the graph and yield messages over the SSE stream.
         async for stream_event in agent.astream(
             **kwargs, stream_mode=["updates", "messages", "custom"]
