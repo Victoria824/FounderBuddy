@@ -176,6 +176,30 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
                     # Use the unified section data extraction
                     from ..prompts import extract_section_data
                     auto_section_update = extract_section_data(conversation_history, state['current_section'].value)
+                    
+                    # Validate the returned structure has 'content' key
+                    if isinstance(auto_section_update, dict):
+                        if 'content' not in auto_section_update:
+                            # If missing 'content' key, wrap the data in correct Tiptap format
+                            logger.warning("Auto-generated section_update missing 'content' key, fixing...")
+                            auto_section_update = {
+                                "content": {
+                                    "type": "doc",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": str(auto_section_update)
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                            logger.info("✅ Fixed section_update structure with proper Tiptap format")
+                    
                     agent_output.section_update = auto_section_update
                     logger.info("✅ Successfully auto-generated section_update")
                 else:
