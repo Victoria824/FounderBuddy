@@ -23,10 +23,11 @@ from ..models import (
     ValueCanvasState,
 )
 from ..tools import (
-    create_tiptap_content,
+    convert_to_tiptap_json,
     extract_plain_text,
     get_all_sections_status,
     save_section,
+    update_canvas_data,
     validate_field,
 )
 
@@ -36,9 +37,10 @@ logger = get_logger(__name__)
 memory_updater_tools = [
     save_section,
     get_all_sections_status,
-    create_tiptap_content,
     extract_plain_text,
     validate_field,
+    convert_to_tiptap_json,
+    update_canvas_data,  # Add canvas data update tool
 ]
 
 # Create tool node
@@ -116,9 +118,12 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                     model_class=extraction_model
                 )
                 
-                # Convert to Tiptap format
-                tiptap_content = await create_tiptap_content.ainvoke({
-                    "text": str(extracted_data)  # Convert dict to string for Tiptap formatting
+                # Convert to Tiptap format using the new tool
+                # Convert Pydantic model to dict for the tool
+                data_dict = extracted_data.model_dump() if hasattr(extracted_data, 'model_dump') else extracted_data
+                tiptap_content = await convert_to_tiptap_json.ainvoke({
+                    "data": data_dict,
+                    "section_id": section_id
                 })
                 
                 computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
@@ -174,27 +179,28 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                     else:
                         extracted_dict = extracted_data
                     
-                    # Special handling for SignatureMethodData
-                    if state["current_section"] == SectionID.SIGNATURE_METHOD:
-                        # Map SignatureMethodData to ValueCanvasData fields
-                        if 'method_name' in extracted_dict:
-                            canvas_data.method_name = extracted_dict['method_name']
-                        
-                        # Convert principles list to the old format for compatibility
-                        if 'principles' in extracted_dict and extracted_dict['principles']:
-                            principles = extracted_dict['principles']
-                            canvas_data.sequenced_principles = [p['name'] for p in principles if 'name' in p]
-                            canvas_data.principle_descriptions = {
-                                p['name']: p['description'] for p in principles 
-                                if 'name' in p and 'description' in p
-                            }
-                    else:
-                        # Standard field mapping for other sections
-                        for field, value in extracted_dict.items():
-                            if hasattr(canvas_data, field) and value is not None:
-                                setattr(canvas_data, field, value)
+                    # Convert canvas_data to dict for the tool
+                    canvas_dict = canvas_data.model_dump() if hasattr(canvas_data, 'model_dump') else canvas_data
                     
-                    logger.memory_update(section_id, "canvas_data updated")
+                    # Use the new tool to update canvas_data
+                    updated_canvas_dict = await update_canvas_data.ainvoke({
+                        "extracted_data": extracted_dict,
+                        "canvas_data": canvas_dict,
+                        "section_id": section_id
+                    })
+                    
+                    # Update the canvas_data in state
+                    # Convert dict back to the original type if needed
+                    if hasattr(canvas_data, '__class__'):
+                        # If canvas_data was a Pydantic model, update its fields
+                        for field, value in updated_canvas_dict.items():
+                            if hasattr(canvas_data, field):
+                                setattr(canvas_data, field, value)
+                    else:
+                        # If it was a dict, just replace it
+                        state["canvas_data"] = updated_canvas_dict
+                    
+                    logger.memory_update(section_id, "canvas_data updated via tool")
                 except Exception as e:
                     logger.warning(f"Failed to update canvas_data for {section_id}: {e}")
     # Handle router directive changes even without content to save

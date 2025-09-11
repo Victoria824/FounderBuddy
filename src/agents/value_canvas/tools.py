@@ -646,71 +646,187 @@ def _generate_checklist_content(canvas_data: dict[str, Any]) -> str:
 
 
 @tool
-async def create_tiptap_content(
-    text: str,
-    format_type: str = "paragraph",
-) -> dict[str, Any]:
+async def convert_to_tiptap_json(data: dict, section_id: str = "") -> dict:
     """
-    Create Tiptap JSON content from plain text.
+    Convert structured data directly to Tiptap JSON format.
     
     Args:
-        text: Plain text content
-        format_type: Type of formatting (paragraph, heading, list)
-    
+        data: Dict containing extracted data (will be Pydantic model converted to dict)
+        section_id: The section ID for context (can be used for section-specific formatting)
+        
     Returns:
-        Tiptap JSON document
+        Tiptap JSON document with formatted content
     """
     content = []
     
-    if format_type == "paragraph":
-        content.append({
-            "type": "paragraph",
-            "content": [
-                {
-                    "type": "text",
-                    "text": text,
-                }
-            ],
-        })
-    elif format_type == "heading":
-        content.append({
-            "type": "heading",
-            "attrs": {"level": 2},
-            "content": [
-                {
-                    "type": "text",
-                    "text": text,
-                }
-            ],
-        })
-    elif format_type == "list":
-        items = text.split("\\n")
-        list_items = []
-        for item in items:
-            if item.strip():
-                list_items.append({
-                    "type": "listItem",
+    # Get data as dictionary
+    if hasattr(data, 'model_dump'):
+        data_dict = data.model_dump()
+    else:
+        data_dict = data if isinstance(data, dict) else {}
+    
+    # Create formatted paragraphs for each non-null field
+    for field, value in data_dict.items():
+        if value is not None:
+            # Skip internal fields
+            if field.startswith('_'):
+                continue
+            
+            # Format field name (e.g., "client_name" -> "Client Name")
+            field_name = field.replace('_', ' ').title()
+            
+            # Handle list values
+            if isinstance(value, list):
+                # Add field name as heading
+                content.append({
+                    "type": "paragraph",
                     "content": [
                         {
+                            "type": "text",
+                            "text": f"{field_name}:",
+                            "marks": [{"type": "bold"}]
+                        }
+                    ]
+                })
+                # Add list items
+                list_items = []
+                for item in value:
+                    if item:
+                        list_items.append({
+                            "type": "listItem",
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": str(item)
+                                        }
+                                    ]
+                                }
+                            ]
+                        })
+                if list_items:
+                    content.append({
+                        "type": "bulletList",
+                        "content": list_items
+                    })
+            # Handle dict values
+            elif isinstance(value, dict):
+                content.append({
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"{field_name}:",
+                            "marks": [{"type": "bold"}]
+                        }
+                    ]
+                })
+                for sub_key, sub_value in value.items():
+                    if sub_value is not None:
+                        content.append({
                             "type": "paragraph",
                             "content": [
                                 {
                                     "type": "text",
-                                    "text": item.strip(),
+                                    "text": f"  {sub_key.replace('_', ' ').title()}: "
+                                },
+                                {
+                                    "type": "text",
+                                    "text": str(sub_value)
                                 }
-                            ],
+                            ]
+                        })
+            # Handle regular values
+            else:
+                content.append({
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"{field_name}: ",
+                            "marks": [{"type": "bold"}]
+                        },
+                        {
+                            "type": "text",
+                            "text": str(value)
                         }
-                    ],
+                    ]
                 })
-        content.append({
-            "type": "bulletList",
-            "content": list_items,
-        })
     
     return {
         "type": "doc",
-        "content": content,
+        "content": content if content else [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "No data available"
+                    }
+                ]
+            }
+        ]
     }
+
+
+@tool
+async def update_canvas_data(
+    extracted_data: dict,
+    canvas_data: dict,
+    section_id: str
+) -> dict:
+    """
+    Update canvas_data with extracted section data.
+    
+    This tool maps extracted data fields to the appropriate canvas_data fields,
+    with special handling for certain sections like SignatureMethod.
+    
+    Args:
+        extracted_data: Dict containing extracted data from LLM
+        canvas_data: Current canvas_data dict to update
+        section_id: The section ID to determine mapping logic
+        
+    Returns:
+        Updated canvas_data dict with new fields merged
+    """
+    try:
+        # Create a copy of canvas_data to avoid mutation
+        updated_canvas = dict(canvas_data)
+        
+        # Special handling for SignatureMethodData
+        if section_id == "signature_method":
+            # Map SignatureMethodData to ValueCanvasData fields
+            if 'method_name' in extracted_data:
+                updated_canvas['method_name'] = extracted_data['method_name']
+            
+            # Convert principles list to the old format for compatibility
+            if 'principles' in extracted_data and extracted_data['principles']:
+                principles = extracted_data['principles']
+                updated_canvas['sequenced_principles'] = [
+                    p['name'] for p in principles if 'name' in p
+                ]
+                updated_canvas['principle_descriptions'] = {
+                    p['name']: p['description'] 
+                    for p in principles 
+                    if 'name' in p and 'description' in p
+                }
+        else:
+            # Standard field mapping for other sections
+            for field, value in extracted_data.items():
+                if value is not None:
+                    # Only update fields that exist in the original canvas_data
+                    # or are new valid fields for this section
+                    updated_canvas[field] = value
+        
+        logger.info(f"Canvas data updated for section {section_id}")
+        return updated_canvas
+        
+    except Exception as e:
+        logger.error(f"Failed to update canvas_data for {section_id}: {e}")
+        # Return original canvas_data if update fails
+        return canvas_data
 
 
 @tool
@@ -759,6 +875,7 @@ __all__ = [
     "validate_field",
     "export_checklist",
     "get_all_sections_status",
-    "create_tiptap_content",
+    "convert_to_tiptap_json",
+    "update_canvas_data",
     "extract_plain_text",
 ]
