@@ -198,6 +198,7 @@ async def extract_section_data_with_llm(messages: list, section: str, model_clas
         Extracted data as a dictionary matching the model_class schema
     """
     from langchain_core.messages import AIMessage, HumanMessage
+    from langchain_core.runnables import RunnableConfig
     from core.llm import get_model
     
     # Format conversation for extraction
@@ -246,8 +247,18 @@ Be accurate and complete in your extraction."""
     llm = get_model()
     structured_llm = llm.with_structured_output(model_class)
     
-    # Extract data
-    extracted_data = await structured_llm.ainvoke(extraction_prompt)
+    # Use non-streaming config with tags to prevent extraction data from appearing in user stream
+    non_streaming_config = RunnableConfig(
+        configurable={"stream": False},
+        tags=["internal_extraction", "do_not_stream"],
+        callbacks=[]
+    )
+    
+    # Extract data with non-streaming config
+    extracted_data = await structured_llm.ainvoke(
+        extraction_prompt,
+        config=non_streaming_config
+    )
     
     return extracted_data.model_dump() if hasattr(extracted_data, 'model_dump') else extracted_data
 
