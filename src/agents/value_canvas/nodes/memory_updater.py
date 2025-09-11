@@ -65,7 +65,7 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
     if agent_out:
         logger.agent_output(
             section=current_section.value if current_section else "unknown",
-            has_update=bool(agent_out.section_update),
+            has_update=agent_out.should_save_content,
             is_satisfied=agent_out.is_satisfied,
             directive=str(agent_out.router_directive)
         )
@@ -81,32 +81,76 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
 
     if not agent_out:
         logger.debug("No agent output to process")
+        return state
     
-    if agent_out and agent_out.section_update:
+    # NEW LOGIC: Check should_save_content flag instead of section_update
+    if agent_out and agent_out.should_save_content:
         section_id = state["current_section"].value
-        logger.memory_update(section_id, "processing section_update")
+        logger.memory_update(section_id, "extracting and saving content")
         
-        computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
+        # Extract content using LLM instead of relying on section_update
+        from ..prompts import extract_section_data_with_llm
         
-        await save_section.ainvoke({
-            "user_id": state["user_id"],
-            "thread_id": state["thread_id"],
-            "section_id": section_id,
-            "content": agent_out.section_update['content'] if isinstance(agent_out.section_update, dict) else agent_out.section_update, # Pass the Tiptap content directly
-            "satisfaction_feedback": agent_out.user_satisfaction_feedback,
-            "status": computed_status,
-        })
+        # Get the appropriate model for this section
+        section_to_model_map = {
+            SectionID.INTERVIEW: InterviewData,
+            SectionID.ICP: ICPData,
+            SectionID.PAIN: PainData,
+            SectionID.DEEP_FEAR: DeepFearData,
+            SectionID.PAYOFFS: PayoffsData,
+            SectionID.SIGNATURE_METHOD: SignatureMethodData,
+            SectionID.MISTAKES: MistakesData,
+            SectionID.PRIZE: PrizeData,
+        }
+        
+        extraction_model = section_to_model_map.get(state["current_section"])
+        extracted_data = None  # Initialize for later use
+        tiptap_content = None
+        
+        if extraction_model:
+            try:
+                # Extract data using LLM
+                extracted_data = await extract_section_data_with_llm(
+                    messages=state.get("messages", []),
+                    section=section_id,
+                    model_class=extraction_model
+                )
+                
+                # Convert to Tiptap format
+                tiptap_content = await create_tiptap_content.ainvoke({
+                    "text": str(extracted_data)  # Convert dict to string for Tiptap formatting
+                })
+                
+                computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
+                
+                # Save to database
+                await save_section.ainvoke({
+                    "user_id": state["user_id"],
+                    "thread_id": state["thread_id"],
+                    "section_id": section_id,
+                    "content": tiptap_content,
+                    "satisfaction_feedback": agent_out.user_satisfaction_feedback,
+                    "status": computed_status,
+                })
+                
+                logger.info(f"Successfully extracted and saved {section_id} data")
+            except Exception as e:
+                logger.error(f"Failed to extract data for {section_id}: {e}")
+                computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
+        else:
+            logger.warning(f"No extraction model found for section {section_id}")
+            computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
         # Log save operation
         logger.save_operation(
             section=section_id,
             status="satisfied" if agent_out.is_satisfied else "in_progress",
             has_content=True
         )
-        # Parse the section_update content properly
-        if isinstance(agent_out.section_update, dict) and 'content' in agent_out.section_update:
-            tiptap_doc = TiptapDocument.model_validate(agent_out.section_update['content'])
+        
+        # Parse the extracted content for state update
+        if tiptap_content and isinstance(tiptap_content, dict):
+            tiptap_doc = TiptapDocument.model_validate(tiptap_content)
         else:
-            logger.error(f"Invalid section_update structure: {type(agent_out.section_update)}")
             tiptap_doc = TiptapDocument(type="doc", content=[])
         
         state["section_states"][section_id] = SectionState(
@@ -119,172 +163,59 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
             status=_status_from_output(agent_out.is_satisfied, agent_out.router_directive),
         )
 
-        # Extract structured data and update canvas_data
-        section_to_model_map = {
-            SectionID.INTERVIEW: InterviewData,
-            SectionID.ICP: ICPData,
-            SectionID.PAIN: PainData,
-            SectionID.DEEP_FEAR: DeepFearData,
-            SectionID.PAYOFFS: PayoffsData,
-            SectionID.SIGNATURE_METHOD: SignatureMethodData,
-            SectionID.MISTAKES: MistakesData,
-            SectionID.PRIZE: PrizeData,
-        }
-
-        current_section = state.get("current_section")
-        extraction_model = section_to_model_map.get(current_section)
-
-        if extraction_model:
-            try:
-                # 1. Extract plain text from the Tiptap JSON content
-                plain_text = await extract_plain_text.ainvoke({"tiptap_json": agent_out.section_update['content'] if isinstance(agent_out.section_update, dict) else agent_out.section_update})
-                
-                # 2. Define a simple prompt for the LLM
-                extraction_prompt = f"""
-                You are a data extraction specialist. Your task is to accurately extract information from the user's conversation summary and structure it according to the provided format. The context is a "Value Canvas," a business messaging framework.
-
-                Section for Extraction: "{current_section.name}"
-
-                User's Summary:
-                ---
-                {plain_text}
-                ---
-
-                Please extract the data fields based on their descriptions in the target data model. Pay close attention to nuances and ensure all relevant details are captured.
-                """
-                
-                # 3. Get the LLM and bind it to our desired structured output model
-                llm = get_model()
-                structured_llm = llm.with_structured_output(extraction_model)
-                # Add token limits to prevent infinite generation
-                if hasattr(structured_llm, 'bind'):
-                    structured_llm = structured_llm.bind(max_tokens=2000)
-                
-                # 4. Invoke the LLM to get a structured Pydantic object directly
-                # Use non-streaming config to prevent extraction from appearing in user stream
-                non_streaming_config = RunnableConfig(
-                    configurable={"stream": False},
-                    tags=["internal_extraction", "do_not_stream"]
-                )
-                extracted_data = await structured_llm.ainvoke(extraction_prompt, config=non_streaming_config)
-                logger.info(f"Successfully extracted structured data for {current_section.value}")
-
-                # 5. Safely update canvas_data with the extracted, validated data
-                canvas_data = state.get("canvas_data")
-                if canvas_data and extracted_data:
+        # Update canvas_data with the extracted data we already have
+        if extracted_data:
+            canvas_data = state.get("canvas_data")
+            if canvas_data:
+                try:
+                    # Convert extracted_data to dict if it's a Pydantic model
+                    if hasattr(extracted_data, 'model_dump'):
+                        extracted_dict = extracted_data.model_dump()
+                    else:
+                        extracted_dict = extracted_data
+                    
                     # Special handling for SignatureMethodData
-                    if current_section == SectionID.SIGNATURE_METHOD and isinstance(extracted_data, SignatureMethodData):
+                    if state["current_section"] == SectionID.SIGNATURE_METHOD:
                         # Map SignatureMethodData to ValueCanvasData fields
-                        canvas_data.method_name = extracted_data.method_name
+                        if 'method_name' in extracted_dict:
+                            canvas_data.method_name = extracted_dict['method_name']
                         
                         # Convert principles list to the old format for compatibility
-                        if extracted_data.principles:
-                            canvas_data.sequenced_principles = [p.name for p in extracted_data.principles if p.name]
+                        if 'principles' in extracted_dict and extracted_dict['principles']:
+                            principles = extracted_dict['principles']
+                            canvas_data.sequenced_principles = [p['name'] for p in principles if 'name' in p]
                             canvas_data.principle_descriptions = {
-                                p.name: p.description for p in extracted_data.principles 
-                                if p.name and p.description
+                                p['name']: p['description'] for p in principles 
+                                if 'name' in p and 'description' in p
                             }
-                        
                     else:
                         # Standard field mapping for other sections
-                        for field, value in extracted_data.model_dump().items():
+                        for field, value in extracted_dict.items():
                             if hasattr(canvas_data, field) and value is not None:
                                 setattr(canvas_data, field, value)
                     
-                    logger.memory_update(current_section.value, "canvas_data updated")
-            except Exception as e:
-                logger.warning(f"Failed to extract structured data for {current_section.value}: {e}")
-    # Handle cases where agent provides satisfaction feedback/status but no structured section_update  
-    elif agent_out:
-        
+                    logger.memory_update(section_id, "canvas_data updated")
+                except Exception as e:
+                    logger.warning(f"Failed to update canvas_data for {section_id}: {e}")
+    # Handle router directive changes even without content to save
+    elif agent_out and agent_out.router_directive == RouterDirective.NEXT:
+        # User wants to proceed to next section, update status even without content
         if state.get("current_section"):
             current_section_id = state["current_section"].value
-            # Only proceed if there's satisfaction feedback to save OR router directive is NEXT.
-            if agent_out.is_satisfied is None and agent_out.router_directive != RouterDirective.NEXT:
-                return state
-
-            # We have satisfaction feedback, so we MUST save. We need to find the content.
-            content_to_save = None
-
-            # 1. Try to find content in the current state for the section
-            if current_section_id in state.get("section_states", {}) and state["section_states"][current_section_id].content:
-                # The content in state should now be the correct Tiptap document
-                content_to_save = state["section_states"][current_section_id].content.content.model_dump()
+            # Mark section as DONE even without content when moving to next
+            computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
             
-            # 2. If not in state, recover from previous message history with improved logic
-            if not content_to_save:
-                messages = state.get("messages", [])
-                summary_text = None
-                # Search backwards through the message history to find the last summary message.
-                for msg in reversed(messages):
-                    if isinstance(msg, AIMessage):
-                        # A summary message typically contains these keywords.
-                        content_lower = msg.content.lower()
-                        if "summary" in content_lower and ("satisfied" in content_lower or "rate 0-5" in content_lower):
-                            summary_text = msg.content
-                            break
-                
-                if summary_text:
-                    content_to_save = await create_tiptap_content.ainvoke({"text": summary_text})
-                else:
-                    logger.error(f"Could not recover summary for {current_section_id}")
-
-            # 3. If we found content (either from state or recovery), proceed with saving.
-            if content_to_save:
-                computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
-                # Log save operation
-                logger.save_operation(
-                    section=current_section_id,
-                    status="satisfied" if agent_out.is_satisfied else "pending",
-                    has_content=True
-                )
-                
-                await save_section.ainvoke({
-                    "user_id": state["user_id"],
-                    "thread_id": state["thread_id"],
-                    "section_id": current_section_id,
-                    "content": content_to_save,
-                    "satisfaction_feedback": agent_out.user_satisfaction_feedback,
-                    "status": computed_status,
-                })
-
-                # Update local state consistently, whether it existed before or not.
-                # Convert content_to_save to TiptapDocument
-                if isinstance(content_to_save, dict):
-                    tiptap_doc = TiptapDocument.model_validate(content_to_save)
-                else:
-                    tiptap_doc = content_to_save
-                
-                state.setdefault("section_states", {})[current_section_id] = SectionState(
-                    section_id=SectionID(current_section_id),
-                    content=SectionContent(
-                        content=tiptap_doc,
-                        plain_text=None
-                    ),
-                    satisfaction_feedback=agent_out.user_satisfaction_feedback,
-                    status=computed_status,
-                )
-            else:
-                # 4. If content recovery failed, check if we should still update status
-                if agent_out.router_directive == RouterDirective.NEXT:
-                    # User wants to proceed, mark section as DONE even without content
-                    
-                    computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
-                    
-                    # Create minimal section state with DONE status
-                    state.setdefault("section_states", {})[current_section_id] = SectionState(
-                        section_id=SectionID(current_section_id),
-                        content=SectionContent(
-                            content=TiptapDocument(type="doc", content=[]),  # Empty content
-                            plain_text=None
-                        ),
-                        satisfaction_feedback=agent_out.user_satisfaction_feedback,
-                        status=computed_status,  # Will be DONE because of router_directive == NEXT
-                    )
-                    logger.save_operation(current_section_id, "done", has_content=False)
-                else:
-                    # Not moving next and no content, cannot update
-                    logger.error(f"Cannot save {current_section_id}: missing content")
+            # Create minimal section state with DONE status
+            state.setdefault("section_states", {})[current_section_id] = SectionState(
+                section_id=SectionID(current_section_id),
+                content=SectionContent(
+                    content=TiptapDocument(type="doc", content=[]),  # Empty content
+                    plain_text=None
+                ),
+                satisfaction_feedback=agent_out.user_satisfaction_feedback,
+                status=computed_status,  # Will be DONE because of router_directive == NEXT
+            )
+            logger.save_operation(current_section_id, "done", has_content=False)
 
         else:
             logger.warning("Cannot update section state: missing context")

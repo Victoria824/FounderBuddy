@@ -90,8 +90,8 @@ def get_next_unfinished_section(section_states: dict[str, Any]) -> SectionID | N
 
 
 def get_decision_prompt_template() -> str:
-    """Get decision analysis prompt template for generate_decision_node"""
-    return """You are analyzing a conversation to extract structured decision data for a Value Canvas agent.
+    """Get decision analysis prompt template for generate_decision_node - Simplified version without section_update"""
+    return """You are analyzing a conversation to make routing decisions for a Value Canvas agent.
 
 CURRENT CONTEXT:
 - Section: {current_section}
@@ -106,130 +106,61 @@ The following is the complete prompt/rules for the current section. Study it car
 CONVERSATION HISTORY:
 {conversation_history}
 
-ENHANCED DECISION RULES - UNDERSTAND THE SECTION FLOW:
+DECISION MAKING RULES:
 
-1. READ AND UNDERSTAND THE SECTION CONTEXT:
+1. UNDERSTAND THE SECTION CONTEXT:
    - The section prompt above defines the exact flow and rules for this section
-   - Understand where we are in the section's process by analyzing the conversation patterns
-   - Different sections have different triggers for when to save data
+   - Understand where we are in the section's process by analyzing the conversation
+   - Each section has specific completion criteria
 
-2. 🔍 SECTION COMPLETENESS VERIFICATION:
+2. DETERMINE IF CONTENT SHOULD BE SAVED (should_save_content):
    
-   **CRITICAL: User satisfaction ≠ Section completion**
-   
-   Before EVER using router_directive="next", verify:
-   - Has the section reached its FINAL step/output as defined in the section prompt?
-   - For multi-step sections: Are ALL steps completed?
-   - For data collection sections: Are ALL required fields collected AND presented in final summary?
-   - Has the user confirmed satisfaction with the COMPLETE section output (not just intermediate confirmations)?
-   
-   Common mistakes to avoid:
-   - Confusing intermediate confirmations (e.g., "Yes, that makes sense" to explanations) with section completion
-   - Moving to next section when user is satisfied with partial progress
-   - Ignoring section-specific flow requirements
-   
-   **Section-specific requirements:**
-   - Pain section: Must have pain1_symptom, pain1_struggle, pain1_cost, pain1_consequence, 
-     pain2_symptom, pain2_struggle, pain2_cost, pain2_consequence,
-     pain3_symptom, pain3_struggle, pain3_cost, pain3_consequence (12 fields total)
-   - ICP section: Must have all 8 ICP fields defined in the prompt
-   - Interview section: Must complete all 7 steps before moving to next section
-   
-   **If ANY required step/field is missing:**
-   - router_directive MUST be "stay"
-   - section_update should be null
-   - AI should continue with the next step/question
-
-3. UNIVERSAL SECTION PATTERNS TO RECOGNIZE:
-
-   ✅ SAVE DATA (generate section_update) when you see these patterns:
-   
-   **Interview Section Specific:**
-   - "Ok, before I add that into memory, let me present a refined version:" + rating request → SAVE (Step 6) 
-   - Key insight: Interview has 7 steps, saves at Step 6, NOT at Step 4 confirmation
-   
-   **Pain Section Specific:**
-   - ALL 3 pain points fully collected (4 elements each)
-   - AI presents synthesized summary of all pain points
-   - AI asks for satisfaction rating AFTER showing complete summary
-   
-   **All Sections Universal Patterns:**
-   - AI presents complete summary with bullet points or structured data
-   - AI asks "Are you satisfied with this summary?" after showing summary
+   Set should_save_content = true when:
+   - AI just presented a complete summary with all required data
+   - AI is asking for satisfaction rating after showing summary
    - AI says "Here's what I gathered/collected" with actual data
    - AI shows refined/synthesized version of user input
-   - AI asks "Is that directionally correct?" after presenting complete data
    
-   ❌ DON'T SAVE DATA when:
-   - Simple confirmation: "Is this correct?" without showing data summary
-   - Still collecting information: asking individual questions
+   Set should_save_content = false when:
+   - Still collecting information
+   - Asking individual questions
    - Introduction or explanation phases
-   - Partial data display for verification only
-   - ANY required fields are missing
+   - Partial data or intermediate confirmations
 
-4. INTELLIGENT DECISION MAKING:
+3. ROUTER DIRECTIVE DECISION:
    
-   **For section_update decision:**
-   - Analyze if AI's reply contains complete data summary or synthesis
-   - Verify ALL required fields have been collected
-   - Look for structured presentation (bullets, numbered lists, formatted data)
-   - Check if AI is presenting refined/processed user input
+   "stay": Continue current section when:
+   - Section-specific completion criteria NOT met
+   - Still collecting required information
+   - User needs to provide corrections
+   - ANY intermediate step is in progress
    
-   **For satisfaction feedback analysis:**
-   - Identify when AI explicitly asks for satisfaction feedback
-   - True when AI asks "Are you satisfied with this summary?" or similar satisfaction questions
-   - False for content confirmation questions like "Is this correct?"
+   "next": Move to next section ONLY when:
+   - ALL section-specific completion criteria are met
+   - ALL required data has been collected AND presented
+   - User has confirmed satisfaction with COMPLETE section output
    
-   **For router_directive decision:**
-   
-   🚨 CRITICAL: Your router_directive is the FINAL decision and will NOT be overridden.
-   
-   - "stay": Continue current section when:
-     - Section-specific completion criteria NOT met (check section prompt for exact requirements)
-     - Still collecting required information
-     - User needs to provide corrections
-     - ANY intermediate step is in progress
-     - User confirms understanding but section work continues
-     
-   - "next": Move to next section ONLY when:
-     - ALL section-specific completion criteria are met
-     - ALL required data has been collected AND presented
-     - Section-specific final step is reached (e.g., Interview Step 7)
-     - User has confirmed satisfaction with COMPLETE section output
-     - The section prompt explicitly indicates readiness to move
-     
-   - "modify:X": User explicitly requests different section OR requests to modify core framework data
-     - Common section jumping patterns: "Let's work on...", "I want to do the...", "What about the..."
-     - ICP modification patterns: "adjust my icp", "change the role to", "focus on [different segment]", "target [different decision maker]", "modify the icp"
-     - Pain modification patterns: "change the pain points", "adjust the problems", "modify the pain"
-     - Payoffs modification patterns: "change the benefits", "adjust the outcomes", "modify the payoffs"
-     - When in ICP Stress Test and user wants to implement suggested ICP changes: → "modify:icp"
+   "modify:X": Jump to section X when:
+   - User explicitly requests different section
+   - Examples: "Let's work on pain points", "I want to adjust my ICP"
 
-   ⚠️ IMPORTANT: is_satisfied does NOT automatically mean "next"!
-   - is_satisfied=true with incomplete section → router_directive="stay"
-   - is_satisfied=true with complete section → router_directive="next"
-   - Let the section completion status, not just satisfaction, guide your decision
+4. SATISFACTION ANALYSIS:
    
-   CRITICAL: "User satisfaction" alone is NOT sufficient for "next". 
-   Each section defines its own completion criteria in its prompt. 
-   You MUST verify these criteria are fully met before using "next".
+   is_satisfied = true: User explicitly expressed satisfaction with summary
+   is_satisfied = false: User wants changes or corrections
+   is_satisfied = null: No clear satisfaction feedback yet
 
-   **Examples of CORRECT decision making:**
-   - Interview Step 3: User says "Yes, that sounds good" → router_directive="stay" (Steps 4-7 still needed)
-   - Interview Step 7: User confirms "Ready to proceed" → router_directive="next" (All steps completed)
-   - ICP: User satisfied with first question answer → router_directive="stay" (7 more fields needed)
-   - ICP: User satisfied with complete 8-field summary → router_directive="next" (Section complete)
-   - Pain: User satisfied with first pain point → router_directive="stay" (2 more pain points needed)
-   - Pain: User satisfied with all 3 pain points summary → router_directive="next" (Section complete)
-
-5. ⚠️ DEVIATION DETECTION:
+5. KEY PRINCIPLE:
    
-   If the AI appears to be providing advice or solutions instead of collecting Value Canvas data:
-   - router_directive: "stay"
-   - section_update: null
-   - The AI should be redirected back to the collection task
+   User satisfaction ≠ Section completion
+   - Being satisfied with partial progress doesn't mean move to next
+   - Check if ALL section requirements are met before using "next"
 
-CRITICAL: You must output valid JSON with the ChatAgentDecision structure."""
+CRITICAL: Output valid JSON with these fields:
+- router_directive: "stay" | "next" | "modify:X"
+- should_save_content: true | false
+- is_satisfied: true | false | null
+- user_satisfaction_feedback: string | null"""
 
 
 def format_conversation_for_decision(messages: list) -> str:
@@ -252,56 +183,73 @@ def format_conversation_for_decision(messages: list) -> str:
     return "\n".join(formatted)
 
 
-def extract_section_data(conversation_history: str, section_id: str = "interview") -> dict:
-    """Extract section-specific data from conversation history and return in Tiptap format.
+async def extract_section_data_with_llm(messages: list, section: str, model_class: type) -> dict:
+    """Extract section-specific data from conversation using LLM.
     
-    This function should parse the conversation history to extract the actual values
-    and return them in the correct Tiptap JSON structure.
+    This replaces the old regex-based extraction with intelligent LLM-based extraction
+    that can handle any section and any format.
+    
+    Args:
+        messages: List of conversation messages
+        section: The current section ID
+        model_class: The Pydantic model class for structured extraction
+    
+    Returns:
+        Extracted data as a dictionary matching the model_class schema
     """
-    # Parse conversation history to extract actual values
-    # For now, we'll extract from the summary that appears in the conversation
-    import re
+    from langchain_core.messages import AIMessage, HumanMessage
+    from core.llm import get_model
     
-    # Initialize default values
-    client_name = "Joe"
-    company_name = "ABC Company"
-    industry = "Technology & Software"
-    outcomes = "lose weight"
+    # Format conversation for extraction
+    conversation_text = ""
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            conversation_text += f"User: {msg.content}\n"
+        elif isinstance(msg, AIMessage):
+            conversation_text += f"AI: {msg.content}\n"
     
-    # Try to extract actual values from conversation history
-    if conversation_history:
-        # Look for the summary pattern in the conversation
-        summary_pattern = r"• Name: ([^\n]+)\n• Company: ([^\n]+)\n• Industry: ([^\n]+)\n• Outcomes: ([^\n]+)"
-        match = re.search(summary_pattern, conversation_history)
-        if match:
-            client_name = match.group(1).strip()
-            company_name = match.group(2).strip()
-            industry = match.group(3).strip()
-            outcomes = match.group(4).strip()
+    # Find the most recent summary in the conversation
+    summary_text = ""
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage):
+            content_lower = msg.content.lower()
+            # Look for summary indicators
+            if any(indicator in content_lower for indicator in [
+                "here's what i gathered", "here's your summary", 
+                "refined version", "let me present", "here's the summary"
+            ]):
+                summary_text = msg.content
+                break
     
-    # Create the summary text
-    summary_text = f"""• Name: {client_name}
-• Company: {company_name}
-• Industry: {industry}
-• Outcomes: {outcomes}"""
+    if not summary_text:
+        # If no clear summary found, use the last AI message
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                summary_text = msg.content
+                break
     
-    # Return in correct Tiptap format with 'content' key
-    return {
-        "content": {
-            "type": "doc",
-            "content": [
-                {
-                    "type": "paragraph",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": summary_text
-                        }
-                    ]
-                }
-            ]
-        }
-    }
+    # Create extraction prompt
+    extraction_prompt = f"""Extract structured data from this Value Canvas section conversation.
+
+Section: {section}
+
+Summary/Content to Extract From:
+{summary_text}
+
+Full Conversation Context:
+{conversation_text[-3000:]}  # Last 3000 chars for context
+
+Extract all relevant fields according to the data model requirements.
+Be accurate and complete in your extraction."""
+    
+    # Use LLM with structured output
+    llm = get_model()
+    structured_llm = llm.with_structured_output(model_class)
+    
+    # Extract data
+    extracted_data = await structured_llm.ainvoke(extraction_prompt)
+    
+    return extracted_data.model_dump() if hasattr(extracted_data, 'model_dump') else extracted_data
 
 
 # Export all functions and data for backward compatibility
@@ -314,5 +262,5 @@ __all__ = [
     "get_next_unfinished_section",
     "get_decision_prompt_template",
     "format_conversation_for_decision",
-    "extract_section_data",
+    "extract_section_data_with_llm",
 ]

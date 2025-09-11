@@ -39,7 +39,7 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
             router_directive="stay",
             user_satisfaction_feedback=None,
             is_satisfied=None,
-            section_update=None
+            should_save_content=False
         )
         # Create agent_output with empty reply
         state["agent_output"] = ChatAgentOutput(
@@ -111,20 +111,11 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
         logger.info(f"DECISION_DEBUG: LLM returned decision type: {type(decision)}")
         logger.info(f"DECISION_DEBUG: Decision fields: {decision.__dict__ if hasattr(decision, '__dict__') else decision}")
         
-        # Validate section_update structure before proceeding
-        if decision.section_update is not None:
-            logger.info(f"DECISION_DEBUG: section_update type: {type(decision.section_update)}")
-            logger.info(f"DECISION_DEBUG: section_update keys: {decision.section_update.keys() if isinstance(decision.section_update, dict) else 'Not a dict'}")
-            if isinstance(decision.section_update, dict) and 'content' in decision.section_update:
-                logger.info("DECISION_DEBUG: section_update has 'content' key")
-            else:
-                logger.warning("DECISION_DEBUG: section_update missing 'content' key! Fixing structure...")
-                # Fix malformed section_update
-                if not isinstance(decision.section_update, dict):
-                    decision.section_update = {"content": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Auto-generated content"}]}]}}
-                elif 'content' not in decision.section_update:
-                    decision.section_update['content'] = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Auto-generated content"}]}]}
-                logger.info("DECISION_DEBUG: Fixed section_update structure")
+        # Log the new should_save_content field
+        if decision.should_save_content:
+            logger.info("DECISION_DEBUG: should_save_content is True - content extraction needed in memory_updater")
+        else:
+            logger.info("DECISION_DEBUG: should_save_content is False - no content to save")
         
         logger.info(f"LLM decision analysis completed: {decision}")
 
@@ -133,9 +124,7 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
         logger.info(f"🎯 Router directive: {decision.router_directive}")
         logger.info(f"📝 User satisfaction feedback: {decision.user_satisfaction_feedback}")
         logger.info(f"😊 Is satisfied: {decision.is_satisfied}")
-        logger.info(f"💾 Section update provided: {bool(decision.section_update)}")
-        if decision.section_update:
-            logger.info(f"Section update content keys: {list(decision.section_update.keys())}")
+        logger.info(f"💾 Should save content: {decision.should_save_content}")
         
         # CRITICAL: Log if decision seems wrong
         if decision.router_directive == "next" and state['current_section'].value == "interview":
@@ -149,75 +138,18 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
             router_directive=decision.router_directive,
             user_satisfaction_feedback=decision.user_satisfaction_feedback,
             is_satisfied=decision.is_satisfied,
-            section_update=decision.section_update
+            should_save_content=decision.should_save_content
         )
 
-        # Enhanced business logic validation
-        # Check if we're asking for satisfaction feedback without providing section update
-        asking_for_feedback = ("satisfied" in agent_output.reply.lower() or "satisfaction" in agent_output.reply.lower() or "feedback" in agent_output.reply.lower())
-        if asking_for_feedback:
-            # CRITICAL VALIDATION: If asking for satisfaction feedback, must have section_update
-            if not agent_output.section_update:
-                logger.warning("⚠️ Model requested rating but provided no section_update - attempting auto-generation")
-                
-                # Check if reply contains summary patterns that should trigger section_update
-                summary_patterns = [
-                    "here's what i gathered", "here's what i've gathered",
-                    "here's your summary", "here's the summary",
-                    "refined version", "•", "bullet",
-                    "name:", "company:", "industry:"
-                ]
-                
-                reply_lower = last_ai_reply.lower()
-                has_summary = any(pattern in reply_lower for pattern in summary_patterns)
-                
-                if has_summary:
-                    logger.info("📝 Summary patterns detected, auto-generating section_update")
-                    # Use the unified section data extraction
-                    from ..prompts import extract_section_data
-                    auto_section_update = extract_section_data(conversation_history, state['current_section'].value)
-                    
-                    # Validate the returned structure has 'content' key
-                    if isinstance(auto_section_update, dict):
-                        if 'content' not in auto_section_update:
-                            # If missing 'content' key, wrap the data in correct Tiptap format
-                            logger.warning("Auto-generated section_update missing 'content' key, fixing...")
-                            auto_section_update = {
-                                "content": {
-                                    "type": "doc",
-                                    "content": [
-                                        {
-                                            "type": "paragraph",
-                                            "content": [
-                                                {
-                                                    "type": "text",
-                                                    "text": str(auto_section_update)
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            }
-                            logger.info("✅ Fixed section_update structure with proper Tiptap format")
-                    
-                    agent_output.section_update = auto_section_update
-                    logger.info("✅ Successfully auto-generated section_update")
-                else:
-                    logger.error("CRITICAL ERROR: Model requested rating but no summary content found!")
-                    logger.error("This violates the core system prompt rule and will cause data loss.")
-                    
-                    # Force correction to prevent infinite loops
-                    agent_output = ChatAgentOutput(
-                        reply=last_ai_reply,
-                        router_directive="stay",
-                        user_satisfaction_feedback=None,
-                        is_satisfied=None,
-                        section_update=None
-                    )
-                    logger.info("🔧 FORCED CORRECTION: Reset to continue collecting information.")
-            
-            state["awaiting_satisfaction_feedback"] = (agent_output.user_satisfaction_feedback is None and agent_output.is_satisfied is None)
-            logger.info(f"State updated: awaiting_satisfaction_feedback set to {state['awaiting_satisfaction_feedback']}")
+        # Simplified validation - just track if we're waiting for feedback
+        asking_for_feedback = ("satisfied" in agent_output.reply.lower() or 
+                              "satisfaction" in agent_output.reply.lower() or 
+                              "feedback" in agent_output.reply.lower())
+        
+        if asking_for_feedback and agent_output.should_save_content:
+            state["awaiting_satisfaction_feedback"] = (agent_output.user_satisfaction_feedback is None and 
+                                                       agent_output.is_satisfied is None)
+            logger.info(f"State updated: awaiting_satisfaction_feedback = {state['awaiting_satisfaction_feedback']}")
         else:
             state["awaiting_satisfaction_feedback"] = False
 
@@ -271,7 +203,7 @@ async def generate_decision_node(state: ValueCanvasState, config: RunnableConfig
             router_directive="stay",
             user_satisfaction_feedback=None,
             is_satisfied=None,
-            section_update=None,
+            should_save_content=False
         )
         agent_output = ChatAgentOutput(
             reply=last_ai_reply,
