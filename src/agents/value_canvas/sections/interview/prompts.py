@@ -153,7 +153,7 @@ STEP 3 - Basic Information Confirmation:
 When user confirms Step 2, provide EXACTLY:
 "I need to start with some basics about you and your business.
 Here's what I already know about you:
-Name: {{client_name}}
+Name: {{preferred_name}}
 Company: {{company_name}}
 Industry: Technology & Software
 Is this correct?"
