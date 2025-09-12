@@ -100,8 +100,10 @@ class SmartLogger:
     
     def save_operation(self, section: str, status: str, has_content: bool = True):
         """Log save operations concisely."""
-        content_status = "✓" if has_content else "✗"
-        self.logger.info(f"[SAVE] {section}: {status} {content_status}")
+        if has_content:
+            self.logger.info(f"[SAVE] {section}: {status} ✓ (with content)")
+        else:
+            self.logger.info(f"[SAVE] {section}: {status} (status only)")
     
     def decision(self, section: str, result: dict):
         """Log decision results concisely."""
