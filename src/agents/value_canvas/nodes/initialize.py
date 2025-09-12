@@ -6,6 +6,8 @@ from langchain_core.runnables import RunnableConfig
 
 from ..enums import RouterDirective, SectionID
 from ..models import ValueCanvasData, ValueCanvasState
+from integrations.dentapp.dentapp_client import get_dentapp_client
+from core.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,58 @@ async def initialize_node(state: ValueCanvasState, config: RunnableConfig) -> Va
         state["awaiting_satisfaction_feedback"] = False
     if "messages" not in state:
         state["messages"] = []
+    
+    # Fetch user context from DentApp API if enabled
+    if settings.USE_DENTAPP_API and state.get("user_id"):
+        try:
+            logger.info(f"Fetching user context from DentApp API for user_id={state['user_id']}")
+            client = get_dentapp_client()
+            if client:
+                user_context = await client.get_agent_context(state["user_id"])
+                if user_context:
+                    logger.info(f"Retrieved user context: {user_context}")
+                    # Update canvas_data with user information
+                    if isinstance(state["canvas_data"], dict):
+                        canvas_data_dict = state["canvas_data"]
+                    else:
+                        canvas_data_dict = state["canvas_data"].model_dump() if hasattr(state["canvas_data"], 'model_dump') else {}
+                    
+                    # Map API fields to canvas_data fields
+                    canvas_data_dict["client_name"] = user_context.get("full_name", "Joe")  # Fallback to Joe
+                    canvas_data_dict["preferred_name"] = user_context.get("preferred_name", "")
+                    canvas_data_dict["company_name"] = user_context.get("company_name", "ABC Company")  # Fallback to ABC Company
+                    # Industry remains hardcoded as requested
+                    canvas_data_dict["industry"] = "Technology & Software"
+                    
+                    # Update state with new canvas_data
+                    state["canvas_data"] = ValueCanvasData(**canvas_data_dict)
+                    logger.info(f"Updated canvas_data with user context: client_name={canvas_data_dict['client_name']}, company_name={canvas_data_dict['company_name']}")
+                else:
+                    logger.warning(f"No user context found for user_id={state['user_id']}, using defaults")
+                    # Set default values if API returns nothing
+                    if isinstance(state["canvas_data"], dict):
+                        canvas_data_dict = state["canvas_data"]
+                    else:
+                        canvas_data_dict = state["canvas_data"].model_dump() if hasattr(state["canvas_data"], 'model_dump') else {}
+                    
+                    canvas_data_dict["client_name"] = "Joe"
+                    canvas_data_dict["company_name"] = "ABC Company"
+                    canvas_data_dict["industry"] = "Technology & Software"
+                    
+                    state["canvas_data"] = ValueCanvasData(**canvas_data_dict)
+        except Exception as e:
+            logger.error(f"Failed to fetch user context: {e}, using default values")
+            # Set default values on error
+            if isinstance(state["canvas_data"], dict):
+                canvas_data_dict = state["canvas_data"]
+            else:
+                canvas_data_dict = state["canvas_data"].model_dump() if hasattr(state["canvas_data"], 'model_dump') else {}
+            
+            canvas_data_dict["client_name"] = "Joe"
+            canvas_data_dict["company_name"] = "ABC Company"
+            canvas_data_dict["industry"] = "Technology & Software"
+            
+            state["canvas_data"] = ValueCanvasData(**canvas_data_dict)
     
     logger.info(f"Initialize complete - User: {state['user_id']}, Thread: {state['thread_id']}")
     return state

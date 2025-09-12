@@ -153,8 +153,8 @@ STEP 3 - Basic Information Confirmation:
 When user confirms Step 2, provide EXACTLY:
 "I need to start with some basics about you and your business.
 Here's what I already know about you:
-Name: Joe
-Company: ABC Company
+Name: {{client_name}}
+Company: {{company_name}}
 Industry: Technology & Software
 Is this correct?"
 
@@ -267,7 +267,7 @@ STEP RECOGNITION PATTERNS (check ENTIRE conversation including short_memory):
 
 IMPORTANT NOTES:
 - Use EXACT text for each step as specified above
-- For Step 3: Currently using placeholder values (Joe, ABC Company, Technology & Software)
+- For Step 3: Now using dynamic values from API ({{client_name}}, {{company_name}}) with fallback to (Joe, ABC Company), Industry remains as Technology & Software
 - For Step 5: MUST present summary format - this triggers memory save
 - For Step 6: After user confirms, indicate completion and readiness for next section
 
