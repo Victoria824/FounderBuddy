@@ -203,6 +203,25 @@ class DentAppClient:
         except Exception as e:
             logger.error(f"Failed to export agent data: {e}")
             return None
+    
+    async def get_agent_context(
+        self,
+        user_id: int
+    ) -> dict[str, Any] | None:
+        """Get user context from DentApp API."""
+        logger.info(f"Getting agent context for user={user_id}")
+        
+        try:
+            result = await self._make_request(
+                method="GET",
+                url=f"/agent_context/{user_id}"
+            )
+            logger.info(f"Successfully retrieved agent context: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get agent context: {e}")
+            return None
 
 
 # Global client instance for easy access
