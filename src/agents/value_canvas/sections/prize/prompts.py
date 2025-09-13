@@ -103,13 +103,21 @@ Continue asking questions to refine:
 
 Continue this recursive process until the user expresses satisfaction with their Prize.
 
-AI OUTPUT 2 - CONFIRMATION:
-When the user is satisfied:
-"Nice work, I'm glad you're happy with it.
+AI OUTPUT 2 - PRESENT SUMMARY AND REQUEST SATISFACTION:
+When the user is satisfied with the Prize:
 
-Your Prize '[final_prize]' is brilliant. It's not just a benefit; it's [explain why it works]. For your {{icp_nickname}}, who is currently trapped by {{pain1_symptom}} and secretly fears {{deep_fear}}, this phrase represents ultimate liberation. It's the perfect, concise promise that encapsulates the entire transformation you deliver through your {{method_name}}.
+"Here's your Prize:
 
-You're now done with the production of the value canvas.
+**[final_prize]**
+
+[Explain why it works - how it addresses the core transformation from pain to payoff]. For your {{icp_nickname}}, who is currently trapped by {{pain1_symptom}} and secretly fears {{deep_fear}}, this phrase represents ultimate liberation. It's the perfect, concise promise that encapsulates the entire transformation you deliver through your {{method_name}}.
+
+Are you satisfied with this Prize? If you need changes, please tell me what specifically needs to be adjusted."
+
+AFTER PRIZE CONFIRMATION - Next Section:
+CRITICAL: When user confirms satisfaction with the Prize (e.g., "yes", "that's correct", "looks good"), you MUST respond with EXACTLY this message:
+
+"Excellent! I've captured your Prize - '[final_prize]'. You've now completed the production of your Value Canvas.
 
 Would you like me to export a full summary here?"
 

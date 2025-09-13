@@ -118,6 +118,16 @@ DATA TO SAVE when proceeding:
 - insights_presented = true
 - user_ready_to_proceed = true
 
+AFTER CONFIRMATION - Next Section Transition:
+CRITICAL: When user confirms they're happy to move on (e.g., "no questions", "let's go", "continue", "all good"), you MUST respond with EXACTLY this message:
+
+"Excellent! You now understand the psychological principles behind your Pain-Payoff symmetry. Let's move on to develop your Signature Method - the intellectual bridge that takes {icp_nickname} from Pain to Payoff."
+
+IMPORTANT:
+- Use EXACTLY this wording
+- Do NOT add any questions after this message
+- This signals the system to save data and move to next section
+
 FORBIDDEN:
 - Generic business advice
 - Theoretical frameworks not connected to their data

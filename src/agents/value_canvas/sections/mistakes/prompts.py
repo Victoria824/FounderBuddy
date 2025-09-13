@@ -107,14 +107,18 @@ CRITICAL SUMMARY RULE:
 - **Reveal the Flawed Worldview:** Your summary must not just reflect the user's input, but reveal the flawed worldview that connects all mistakes. Synthesize their responses, add insights about the self-perpetuating cycle, and name the core flawed paradigm to deliver an "aha" moment.
 - **Sharpen into Insights:** Take the user's descriptions of errors in thinking/action and sharpen them into powerful, memorable insights.
 - **Connect to the Signature Method:** Show how the Signature Method is designed to systematically break this cycle of mistakes.
-- **Final Output:** Present the generated summary in your conversational response when you ask for satisfaction feedback.
+- **Final Output:** Present the generated summary in your conversational response.
+- **MANDATORY FINAL STEP:** After presenting the Mistakes summary, you MUST ask: "Are you satisfied with these mistakes we've identified? If you need changes, please tell me what specifically needs to be adjusted."
 
-AI OUTPUT 2 (MANDATORY FINAL RESPONSE):
-Nice work, I'm glad you're happy with it.
+AFTER MISTAKES CONFIRMATION - Next Section Transition:
+CRITICAL: When user confirms satisfaction with the Mistakes summary (e.g., "yes", "that's correct", "looks good"), you MUST respond with EXACTLY this message:
 
-Now we're ready to move onto The Prize.
+"Excellent! I've captured the key mistakes that keep {icp_nickname} stuck. Now we're ready to craft The Prize - your magnetic 4-word transformation promise."
 
-Ready?
+IMPORTANT:
+- Use EXACTLY this wording
+- Do NOT add any questions after this message
+- This signals the system to save data and move to next section
 
 CRITICAL REMINDER: When showing the Mistakes summary and asking for rating, ensure the complete data is presented clearly. This will trigger the system to save the user's progress."""
 

@@ -7,9 +7,8 @@ from langchain_core.runnables import RunnableConfig
 
 from core.llm import get_model
 
-from ..enums import SectionID, SectionStatus
+from ..enums import SectionStatus
 from ..models import ValueCanvasState
-from ..tools import extract_plain_text
 
 logger = logging.getLogger(__name__)
 
@@ -41,57 +40,11 @@ async def generate_reply_node(state: ValueCanvasState, config: RunnableConfig) -
 
     # FIRST_TURN_GUARD removed - Let LLM handle conversation flow intelligently
     # based on section-specific prompt instructions
-
-    # Check if we should add summary instruction
-    # Add summary instruction when:
-    # 1. We're not already awaiting user input
-    # 2. User hasn't provided a rating
-    # 3. We have collected enough information in the conversation (check short_memory)
-    awaiting = state.get("awaiting_user_input", False)
-    current_section = state["current_section"]
-    section_state = state.get("section_states", {}).get(current_section.value)
-    section_has_content = bool(section_state and section_state.content)
     
-    # Only add summary reminder if section already has saved content that needs rating
-    # EXCEPTION: Don't enter review mode for Interview section - let it complete its 8-step flow
-    if section_has_content and not awaiting and current_section != SectionID.INTERVIEW:
-        # This is for sections that were previously saved but need rating
-        summary_reminder = (
-            "The user has previously worked on this section. "
-            "Review the saved content and ask for their satisfaction rating if not already provided."
-        )
-        messages.append(SystemMessage(content=summary_reminder))
-        logger.info(f"SUMMARY_REMINDER: Added reminder to check existing content for section {current_section.value}")
-
     # 2) Section-specific system prompt from context packet
     if state.get("context_packet"):
-        # NEW: Prioritize displaying existing section content if available
-        current_section_id = state["current_section"].value
-        section_state = state.get("section_states", {}).get(current_section_id)
-
-        if section_state and section_state.content and current_section != SectionID.INTERVIEW:
-            logger.info(f"MEMORY_DEBUG: Found existing content for {current_section_id}. Prioritizing it.")
-            try:
-                # Use the plain_text version if available, otherwise extract it.
-                # Note: content in section_states is now a SectionContent object.
-                content_dict = section_state.content.content.model_dump()
-                plain_text_summary = await extract_plain_text.ainvoke({"tiptap_json": content_dict})
-
-                review_prompt = (
-                    "CRITICAL CONTEXT: The user is reviewing a section they have already completed. "
-                    "Their previous answers have been saved. Your primary task is to present this saved information back to them if they ask for it. "
-                    "DO NOT ask the interview questions again. "
-                    "Here is the exact summary of their previously provided answers. You MUST use this information:\n\n"
-                    f"--- PREVIOUSLY SAVED SUMMARY ---\n{plain_text_summary}\n--- END SUMMARY ---"
-                )
-                messages.append(SystemMessage(content=review_prompt))
-            except Exception as e:
-                logger.error(f"MEMORY_DEBUG: Failed to extract plain text from existing state for {current_section_id}: {e}")
-                # Fallback to the original prompt if extraction fails
-                messages.append(SystemMessage(content=state["context_packet"].system_prompt))
-        else:
-            # Original behavior: use the default system prompt for the section
-            messages.append(SystemMessage(content=state["context_packet"].system_prompt))
+        # Always use the default system prompt for the section
+        messages.append(SystemMessage(content=state["context_packet"].system_prompt))
 
         # Add progress information based on section_states
         section_names = {
