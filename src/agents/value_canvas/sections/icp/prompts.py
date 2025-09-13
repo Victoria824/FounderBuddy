@@ -305,6 +305,18 @@ ICP_TEMPLATE = SectionTemplate(
             value=True,
             error_message="ICP golden insight is required"
         ),
+        ValidationRule(
+            field_name="icp_buying_triggers",
+            rule_type="required",
+            value=True,
+            error_message="ICP buying triggers is required"
+        ),
+        ValidationRule(
+            field_name="icp_red_flags",
+            rule_type="required",
+            value=True,
+            error_message="ICP red flags insight is required"
+        ),
     ],
     required_fields=[
         "icp_nickname",
@@ -314,7 +326,9 @@ ICP_TEMPLATE = SectionTemplate(
         "icp_demographics",
         "icp_interests",
         "icp_values",
-        "icp_golden_insight"
+        "icp_golden_insight",
+        "icp_buying_triggers",
+        "icp_red_flags"
     ],
     next_section=SectionID.ICP_STRESS_TEST,
 )
