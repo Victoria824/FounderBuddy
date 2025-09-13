@@ -130,7 +130,7 @@ class ValueCanvasData(BaseModel):
     specialized_skills: str | None = None
     notable_partners: str | None = None
 
-    # ICP data - corresponds to the 8 sections in ICP Template
+    # ICP data - corresponds to the 10 sections in ICP Template
     icp_nickname: str | None = None  # ICP Nick Name
     icp_role_identity: str | None = None  # ROLE/IDENTITY section content
     icp_context_scale: str | None = None  # CONTEXT/SCALE section content
@@ -139,6 +139,8 @@ class ValueCanvasData(BaseModel):
     icp_interests: str | None = None  # INTERESTS section content (all 3 interests)
     icp_values: str | None = None  # VALUES section content (both lifestyle indicators)
     icp_golden_insight: str | None = None  # GOLDEN INSIGHT section content
+    icp_buying_triggers: str | None = None  # BUYING TRIGGERS - moments that push ICP to action
+    icp_red_flags: str | None = None  # RED FLAGS - attitudes/messages that repel ICP
 
     # ICP Stress Test data
     icp_stress_test_can_influence: int | None = None

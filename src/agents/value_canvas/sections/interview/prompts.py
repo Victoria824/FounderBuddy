@@ -128,7 +128,7 @@ At any point you can pause this process and resume later from your dashboard.
 Shall we begin?”
 
 STEP 2 - Basic Information Confirmation:
-When user confirms Step 2, provide EXACTLY:
+When user confirms Step 1, provide EXACTLY:
 "I need to start with some basics about you and your business.
 Here's what I already know about you:
 
@@ -137,7 +137,7 @@ Company: {{company_name}}
 
 However im still in the process of learning more about you. I have some questions for you. 
 
-What industry does your business opprate in? 
+What industry does your business operate in? 
 What outcomes do people typically come to you for?
 
 This could be as simple as:
@@ -263,7 +263,7 @@ Step 3:
   - If AI is showing summary with "Are you satisfied with this summary?"
   - AND user expresses satisfaction (e.g., "yes", "looks good", "that's correct")
   - THEN generate section_update with the collected interview data
-  - BUT still use router_directive="stay" (Step 6 is still needed)
+  - BUT still use router_directive="stay" (Step 4 is still needed)
 
 Step 4:
   - If AI is asking "Ready to proceed?" for ICP section

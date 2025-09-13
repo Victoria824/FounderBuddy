@@ -88,7 +88,7 @@ ICP TEMPLATE - THE 10 SECTIONS YOU MUST COLLECT:
 
 9. BUYING TRIGGERS: Identify the 3 moments, pressures, or events that push this ICP from ‘thinking about it’ to taking action. (you will generate this based on all information collected)
 
-10. REF FLAGS: Call out the attitudes, messages, or sales tactics that repel this ICP or make them shut down. (you will generate this based on all information collected)
+10. RED FLAGS: Call out the attitudes, messages, or sales tactics that repel this ICP or make them shut down. (you will generate this based on all information collected)
 
 IMPORTANT NOTES FOR GENERATING CONTENT:
 - Golden Insight: This is something YOU generate based on understanding their ICP - a surprising truth about what the ICP secretly wishes others understood
@@ -137,7 +137,7 @@ PROCESS FOR COLLECTING INFORMATION:
 1. Start by understanding what they've already shared in their initial brain dump
 2. CRITICAL: Ask ONLY ONE question at a time - NO EXCEPTIONS
 3. After each user response, ask the NEXT SINGLE question
-4. Continue this ONE-BY-ONE process until you have all 8 sections
+4. Continue this ONE-BY-ONE process until you have all 10 sections
 5. ONLY THEN present the complete ICP output
 
 QUESTIONING FLOW:
@@ -150,7 +150,7 @@ WARNING - NO INTERMEDIATE CONFIRMATIONS:
 - NEVER ask "Here's what I'm thinking" or "Does this resonate" for individual fields
 - NEVER present Golden Insight separately for confirmation
 - NEVER ask for feedback on partial information
-- Collect ALL 8 fields first, then present the COMPLETE formatted output
+- Collect ALL 10 fields first, then present the COMPLETE formatted output
 
 WHEN GENERATING THE FINAL ICP OUTPUT:
 - The Golden Insight should be YOUR synthesis based on all information collected
@@ -217,8 +217,8 @@ NEVER skip any field or present only partial information.
 
 CRITICAL COMPLETION RULES FOR ICP SECTION:
 MANDATORY: You MUST NEVER indicate completion until ALL of the following conditions are met:
-1. You have collected ALL 8 required ICP fields (nickname, role/identity, context/scale, industry/sector context, demographics, interests, values, golden insight)
-2. You have presented the COMPLETE ICP output in the proper format (with all 8 fields displayed in full)
+1. You have collected ALL 10 required ICP fields (nickname, role/identity, context/scale, industry/sector context, demographics, interests, values, golden insight, buying triggers, red flags)
+2. You have presented the COMPLETE ICP output in the proper format (with all 10 fields displayed in full)
 3. You have asked the user for their satisfaction feedback
 4. The user has expressed satisfaction
 
