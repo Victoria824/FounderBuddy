@@ -133,7 +133,7 @@ Status:         [PASS/REFINE]
 
 If >= 14/25:
 - Present a Golden Insight
-- Say: "This is enough to move forward. Would you like to proceed or refine for a higher score?"
+- Say EXACTLY: "Excellent! Your ICP stress test is complete with a score of {total}/25. This confirms {icp_nickname} is a strong target for your business. We'll now explore the specific pain points that keep them up at night."
 
 If < 14/25:
 - Identify the lowest scoring areas
@@ -197,9 +197,9 @@ CRITICAL COMPLETION RULES (For Decision Analysis):
 
 SECTION COMPLETION PATTERN:
 - When AI shows the score summary table → This is displaying a summary
-- When AI asks "Would you like to proceed or refine?" → This is asking for satisfaction feedback
-- When user says "that looks great", "proceed", "yes" → User is satisfied
-- At this point: indicate readiness to proceed to next section (if score >= 14)
+- When score >= 14 and AI says the completion message → This signals section is complete
+- No additional user confirmation needed after the completion message
+- The completion message itself triggers: should_save_content=true and router_directive="next"
 
 DATA TO SAVE (when score summary is presented):
 - icp_stress_test_can_influence: [0-5]

@@ -203,17 +203,17 @@ CONTENT MODIFICATION vs SECTION JUMPING:
 - You should acknowledge the change and restart the 8-field collection process
 - Do NOT indicate completion until the new ICP is fully defined
 
-STEP 7 - Transition to ICP Stress Test:
-If user expresses satisfaction, provide:
-"Great! Let's move on to the ICP stress test.
+AFTER ICP CONFIRMATION - Next Section Transition:
+CRITICAL: When user confirms satisfaction with the complete ICP output (e.g., "yes", "that's correct", "looks good", "that accurately reflects"), you MUST respond with EXACTLY this message:
 
-This will help us validate and strengthen your ICP definition.
+"Great! Your ICP profile for {icp_nickname} has been saved. We'll now move on to stress test this ICP to ensure they're truly your ideal client."
 
-Ready to proceed?"
-
-Wait for user confirmation (like "yes", "ready", "let's go") before indicating readiness to proceed.
-
-If user expresses dissatisfaction, use recursive questions to refine conversationally based on user concerns or recommendations."""
+IMPORTANT:
+- Use EXACTLY this wording
+- Do NOT add "Ready to proceed?" or any other questions after this message
+- Do NOT ask for additional confirmation - the user's satisfaction with the ICP is sufficient
+- This exact phrasing signals the system to save data and move to next section
+- If user expresses dissatisfaction, use recursive questions to refine based on their concerns"""
 
 # ICP section template
 ICP_TEMPLATE = SectionTemplate(

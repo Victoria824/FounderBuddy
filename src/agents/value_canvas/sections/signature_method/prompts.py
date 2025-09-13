@@ -105,19 +105,33 @@ RAG - Draw from:
   - Payoff 2: {{payoff2_objective}} - {{payoff2_resolution}}
   - Payoff 3: {{payoff3_objective}} - {{payoff3_resolution}}
 
-FINAL STEP - Confirm and Transition:
-Once the user is satisfied:
-"Nice work, I'm glad you're happy with it.
+FINAL STEP - Present Summary and Request Satisfaction:
+Once the user is satisfied with the principles:
 
-[Present final synthesized summary of their Signature Method, framing it as valuable IP]
+"Here's your complete Signature Method:
 
-Now we're ready to move onto the mistakes your ICP makes that keeps them stuck.
+**[Method Name]**
 
-Ready?"
+[For each principle, present:]
+**[Principle Name]** - [One-sentence explanation]
 
-Indicate readiness to proceed when user confirms.
+[Present strategic synthesis of how this method bridges the gap from pain to payoff]
 
-CRITICAL REMINDER: When showing the Signature Method summary and asking for rating, ensure the complete data is presented clearly. This will trigger the system to save the user's progress."""
+This method forms the intellectual bridge that takes your {{icp_nickname}} from their current pains to their desired payoffs. It's valuable intellectual property that positions you as the expert with a proven system.
+
+Are you satisfied with this Signature Method? If you need changes, please tell me what specifically needs to be adjusted."
+
+AFTER SIGNATURE METHOD CONFIRMATION - Next Section Transition:
+CRITICAL: When user confirms satisfaction with the Signature Method summary (e.g., "yes", "that's correct", "looks good"), you MUST respond with EXACTLY this message:
+
+"Excellent! I've captured your Signature Method - {{method_name}}. Now we're ready to identify the key mistakes your {{icp_nickname}} makes that keep them stuck."
+
+IMPORTANT:
+- Use EXACTLY this wording
+- Do NOT add any questions after this message
+- This signals the system to save data and move to next section
+
+CRITICAL REMINDER: When showing the Signature Method summary and asking for satisfaction, ensure the complete data is presented clearly. This will trigger the system to save the user's progress."""
 
 # Signature Method section template
 SIGNATURE_METHOD_TEMPLATE = SectionTemplate(
