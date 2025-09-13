@@ -13,3 +13,5 @@ class ICPData(BaseModel):
     icp_interests: str | None = Field(None, description="3 specific interests (primary, secondary, tertiary).")
     icp_values: str | None = Field(None, description="2 lifestyle indicators that show their values.")
     icp_golden_insight: str | None = Field(None, description="A profound insight about their buying motivations.")
+    icp_buying_triggers: str | None =Field(None, description="The 3 moments, pressures, or events that push this ICP from ‘thinking about it’ to taking action.")
+    icp_red_flags: str | None =Field(None, description="The attitudes, messages, or sales tactics that repel this ICP or make them shut down.")
