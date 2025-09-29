@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     # DentApp AI Builder API Configuration
     USE_DENTAPP_API: bool = True
     DENTAPP_API_URL: str = "https://gsd.keypersonofinfluence.com"
+    DENTAPP_API_BEARER_TOKEN: SecretStr | None = None
 
     LANGCHAIN_TRACING_V2: bool = False
     LANGCHAIN_PROJECT: str = "default"

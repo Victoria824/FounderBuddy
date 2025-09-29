@@ -12,26 +12,37 @@ logger = logging.getLogger(__name__)
 
 class DentAppClient:
     """HTTP client for DentApp AI Builder API."""
-    
+
     def __init__(self, base_url: str = None, timeout: int = 30):
         self.base_url = base_url or getattr(settings, 'DENTAPP_API_URL', 'https://gsd.keypersonofinfluence.com')
         self.timeout = timeout
+
+        # Build headers with optional Bearer token
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+
+        # Add Bearer token if configured
+        bearer_token = getattr(settings, 'DENTAPP_API_BEARER_TOKEN', None)
+        if bearer_token:
+            token_str = bearer_token.get_secret_value() if hasattr(bearer_token, 'get_secret_value') else str(bearer_token)
+            headers["Authorization"] = f"Bearer {token_str}"
+            logger.info("=== DENTAPP_CLIENT_INIT: Bearer token configured ===")
+
         # Initialize the client immediately instead of waiting for __aenter__
         self._client = AsyncClient(
             base_url=self.base_url,
             timeout=self.timeout,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
+            headers=headers
         )
         logger.info(f"=== DENTAPP_CLIENT_INIT: Initialized with base_url={self.base_url}, timeout={timeout}s ===")
-        
+
     async def __aenter__(self):
         """Async context manager entry."""
         # Client is already initialized in __init__
         return self
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         if self._client:
