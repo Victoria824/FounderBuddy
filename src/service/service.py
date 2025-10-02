@@ -225,11 +225,27 @@ router = APIRouter(dependencies=[Depends(verify_bearer)])
 
 @router.get("/info")
 async def info() -> ServiceMetadata:
+    from schema import EndpointInfo
+
     return ServiceMetadata(
         agents=get_all_agent_info(),
         models=[],  # Models are server-managed, not user-selectable
         default_agent=DEFAULT_AGENT,
         default_model=None,  # Model selection is server-internal
+        endpoints=[
+            EndpointInfo(
+                path="/sync_section/{agent_id}/{section_id}",
+                method="POST",
+                description="Sync LangGraph state with manually edited section content from database. Uses LLM to extract structured data from Tiptap text and updates agent state.",
+                parameters={
+                    "agent_id": "Agent identifier (currently only 'value-canvas' supported)",
+                    "section_id": "Section identifier (e.g., 'interview', 'icp', 'pain', 'deep_fear', 'payoffs', 'signature_method', 'mistakes', 'prize')",
+                    "user_id": "User identifier (required query parameter)",
+                    "thread_id": "Thread/conversation identifier (required query parameter)"
+                },
+                example="/sync_section/value-canvas/icp?user_id=12&thread_id=3ab280c6-44ee-416d-87f9-73aad616c8ec"
+            ),
+        ]
     )
 
 
@@ -823,7 +839,7 @@ async def notify_section_update(
     logger.info(f"=== SECTION_UPDATE_REQUEST: agent_id={agent_id}, section_id={section_id} ===")
     logger.info(f"SECTION_UPDATE_REQUEST: user_id={user_id}")
     logger.info(f"SECTION_UPDATE_REQUEST: thread_id={thread_id}")
-    
+
     # Require thread_id to ensure updates are scoped to the correct document/thread
     if not thread_id:
         raise HTTPException(status_code=422, detail="Missing required parameter: thread_id")
@@ -844,12 +860,12 @@ async def notify_section_update(
     # Execute once; ignore content and return minimal success
     try:
         await agent.ainvoke(**kwargs, stream_mode=["updates", "values"])  # type: ignore
-        
+
         # Log successful section update
         logger.info(f"=== SECTION_UPDATE_SUCCESS: agent_id={agent_id}, section_id={section_id} ===")
         logger.info(f"SECTION_UPDATE_SUCCESS: user_id={user_id}")
         logger.info(f"SECTION_UPDATE_SUCCESS: thread_id={thread_id}")
-        
+
     except Exception as e:
         logger.error(f"=== SECTION_UPDATE_ERROR: agent_id={agent_id}, section_id={section_id} ===")
         logger.error(f"SECTION_UPDATE_ERROR: {str(e)}")
@@ -858,6 +874,92 @@ async def notify_section_update(
         raise HTTPException(status_code=500, detail="Agent sync failed")
 
     return {"success": True}
+
+
+@router.post("/sync_section/{agent_id}/{section_id}")
+async def sync_section(
+    agent_id: str,
+    section_id: str,
+    user_id: int,
+    thread_id: str,
+):
+    """
+    Sync LangGraph state with manually edited section content from database.
+
+    This endpoint:
+    1. Fetches the latest section content from DentApp API (Tiptap format)
+    2. Converts Tiptap to plain text
+    3. Uses LLM to extract structured data from the edited text
+    4. Updates LangGraph state (canvas_data + section_states)
+    5. Persists changes via checkpoint
+
+    This is designed for when users manually edit section content in the frontend
+    and we need to sync the structured state with their changes.
+
+    Args:
+        agent_id: Agent identifier (e.g., "value-canvas")
+        section_id: Section identifier (e.g., "interview", "icp")
+        user_id: User identifier
+        thread_id: Thread/conversation identifier
+
+    Returns:
+        Sync result with success status and details
+    """
+    # Log sync request
+    logger.info(f"=== SYNC_SECTION_REQUEST: agent_id={agent_id}, section_id={section_id} ===")
+    logger.info(f"SYNC_SECTION_REQUEST: user_id={user_id}")
+    logger.info(f"SYNC_SECTION_REQUEST: thread_id={thread_id}")
+
+    # Validate required parameters
+    if not thread_id:
+        raise HTTPException(status_code=422, detail="Missing required parameter: thread_id")
+
+    # Only value-canvas agent is supported for now
+    if agent_id != "value-canvas":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Sync not yet supported for agent: {agent_id}. Currently only 'value-canvas' is supported."
+        )
+
+    # Get agent
+    try:
+        agent: AgentGraph = get_agent(agent_id)
+    except Exception as e:
+        logger.error(f"SYNC_ERROR: Failed to get agent {agent_id}: {e}")
+        raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+
+    # Import sync function (only for value-canvas)
+    try:
+        from agents.value_canvas.sync import sync_section_from_database
+    except ImportError as e:
+        logger.error(f"SYNC_ERROR: Failed to import sync module: {e}")
+        raise HTTPException(status_code=500, detail="Sync module not available")
+
+    # Execute sync
+    try:
+        result = await sync_section_from_database(
+            user_id=user_id,
+            thread_id=thread_id,
+            section_id=section_id,
+            agent_graph=agent
+        )
+
+        # Log successful sync
+        logger.info(f"=== SYNC_SECTION_SUCCESS: agent_id={agent_id}, section_id={section_id} ===")
+        logger.info(f"SYNC_SECTION_SUCCESS: extracted_fields={result.get('extracted_fields', [])}")
+        logger.info(f"SYNC_SECTION_SUCCESS: content_length={result.get('content_length', 0)}")
+
+        return result
+
+    except ValueError as e:
+        logger.error(f"=== SYNC_SECTION_VALIDATION_ERROR: {str(e)} ===")
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"=== SYNC_SECTION_ERROR: agent_id={agent_id}, section_id={section_id} ===")
+        logger.error(f"SYNC_SECTION_ERROR: {str(e)}")
+        logger.error(f"SYNC_SECTION_ERROR: user_id={user_id}")
+        logger.error(f"SYNC_SECTION_ERROR: thread_id={thread_id}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
 @app.get("/health")

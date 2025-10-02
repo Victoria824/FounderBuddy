@@ -19,6 +19,37 @@ class AgentInfo(BaseModel):
     )
 
 
+class EndpointInfo(BaseModel):
+    """Info about an available API endpoint."""
+
+    path: str = Field(
+        description="API endpoint path pattern.",
+        examples=["/sync_section/{agent_id}/{section_id}"],
+    )
+    method: str = Field(
+        description="HTTP method.",
+        examples=["POST", "GET"],
+    )
+    description: str = Field(
+        description="Description of what this endpoint does.",
+        examples=["Sync LangGraph state with manually edited section content from database"],
+    )
+    parameters: dict[str, str] = Field(
+        description="Parameters and their descriptions.",
+        examples=[{
+            "agent_id": "Agent identifier",
+            "section_id": "Section identifier",
+            "user_id": "User identifier (query param)",
+            "thread_id": "Thread identifier (query param)"
+        }],
+    )
+    example: str | None = Field(
+        description="Example URL for this endpoint.",
+        default=None,
+        examples=["/sync_section/value-canvas/icp?user_id=12&thread_id=abc-123"],
+    )
+
+
 class ServiceMetadata(BaseModel):
     """Metadata about the service including available agents and models."""
 
@@ -35,6 +66,10 @@ class ServiceMetadata(BaseModel):
     default_model: AllModelEnum | None = Field(
         description="Default model (server-managed, not user-selectable).",
         default=None,
+    )
+    endpoints: list[EndpointInfo] = Field(
+        description="List of available API endpoints.",
+        default=[],
     )
 
 
