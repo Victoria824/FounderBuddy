@@ -219,3 +219,22 @@ class InvokeResponse(BaseModel):
         description="User ID to persist and continue a conversation across multiple threads.",
         examples=[1, 123],
     )
+
+
+class RefineSectionInput(BaseModel):
+    """Input for refining a section with AI."""
+
+    user_id: int = Field(
+        description="User identifier.",
+        examples=[1, 123],
+    )
+    thread_id: str = Field(
+        description="Thread/conversation identifier.",
+        min_length=1,
+        examples=["847c6285-8fc9-4560-a83f-4e6285809254"],
+    )
+    refinement_prompt: str = Field(
+        description="User's instruction for how to refine the section content.",
+        min_length=1,
+        examples=["Make it more concise", "Add more details about the target audience"],
+    )

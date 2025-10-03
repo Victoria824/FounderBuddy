@@ -6,9 +6,6 @@ checkpoints.db-*
 # Langgraph
 .langgraph_api/
 
-# Supabase
-supabase/
-
 # VSCode
 .vscode
 .DS_Store

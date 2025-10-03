@@ -34,29 +34,15 @@ class PostgresConnectionManager:
         """Build PostgreSQL connection string"""
         if settings.POSTGRES_PASSWORD is None:
             raise ValueError("POSTGRES_PASSWORD is not set")
-        
+
         encoded_password = quote(settings.POSTGRES_PASSWORD.get_secret_value(), safe='')
-        
-        # Detect if using Supabase Pooler
-        if settings.POSTGRES_HOST and "pooler.supabase.com" in settings.POSTGRES_HOST:
-            logger.info("Detected Supabase Pooler, using optimized configuration")
-            # Supabase Pooler optimization config - Note: pgbouncer is not a psycopg parameter, but a connection mode marker
-            return (
-                f"postgresql://{settings.POSTGRES_USER}:"
-                f"{encoded_password}@"
-                f"{settings.POSTGRES_HOST}:6543/"  # Use port 6543
-                f"{settings.POSTGRES_DB}?"
-                f"sslmode=require"
-                # prepare_threshold is set in connection_kwargs
-            )
-        else:
-            # Standard PostgreSQL connection
-            return (
-                f"postgresql://{settings.POSTGRES_USER}:"
-                f"{encoded_password}@"
-                f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/"
-                f"{settings.POSTGRES_DB}?sslmode=require"
-            )
+
+        return (
+            f"postgresql://{settings.POSTGRES_USER}:"
+            f"{encoded_password}@"
+            f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/"
+            f"{settings.POSTGRES_DB}?sslmode=require"
+        )
     
     async def setup(self):
         """Initialize connection pool and related components"""
@@ -68,17 +54,13 @@ class PostgresConnectionManager:
         conn_string = self.get_connection_string()
         
         logger.info("Initializing PostgreSQL connection pool...")
-        
+
         # Connection pool configuration
         connection_kwargs = {
             "autocommit": True,
             "row_factory": dict_row,
         }
-        
-        # If using Supabase Pooler, disable prepared statements
-        if settings.POSTGRES_HOST and "pooler.supabase.com" in settings.POSTGRES_HOST:
-            connection_kwargs["prepare_threshold"] = None  # Completely disable prepared statements
-        
+
         # Create connection pool - use open=False to avoid deprecation warning
         self.pool = AsyncConnectionPool(
             conninfo=conn_string,
@@ -97,10 +79,32 @@ class PostgresConnectionManager:
         # Initialize saver and store
         self.saver = AsyncPostgresSaver(self.pool)
         self.store = AsyncPostgresStore(self.pool)
-        
+
         # Set up database tables
-        await self.saver.setup()
-        await self.store.setup()
+        # Note: Skip setup if tables already exist and user lacks CREATE permission
+        try:
+            await self.saver.setup()
+            await self.store.setup()
+            logger.info("Database tables setup completed")
+        except Exception as e:
+            if "permission denied" in str(e).lower():
+                logger.warning("Skipping table setup (user lacks CREATE permission, checking if tables exist)")
+                # Verify required tables exist
+                async with self.pool.connection() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute("""
+                            SELECT COUNT(*) as count FROM information_schema.tables
+                            WHERE table_schema = 'public'
+                            AND table_name IN ('checkpoints', 'checkpoint_migrations', 'checkpoint_writes', 'checkpoint_blobs', 'store', 'store_migrations')
+                        """)
+                        result = await cur.fetchone()
+                        count = result['count']
+                        if count >= 6:
+                            logger.info(f"✓ Verified {count}/6 required tables exist, proceeding without setup")
+                        else:
+                            raise ValueError(f"Only {count}/6 required tables exist, but cannot create missing tables due to insufficient permissions")
+            else:
+                raise
         
         logger.info("PostgreSQL connection pool initialized successfully")
     
