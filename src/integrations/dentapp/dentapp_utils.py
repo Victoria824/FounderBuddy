@@ -157,10 +157,10 @@ def get_user_id_int(user_id: int) -> int:
 def get_section_id_int(section_id_str: str) -> int | None:
     """
     Convert agent section ID string to DentApp API section_id integer.
-    
+
     Args:
         section_id_str: Section ID from the agent (e.g., "interview", "icp")
-        
+
     Returns:
         Integer section_id for DentApp API, or None if not found
     """
@@ -168,6 +168,27 @@ def get_section_id_int(section_id_str: str) -> int | None:
     if section_id_int is None:
         logger.error(f"Unknown section ID: {section_id_str}")
     return section_id_int
+
+
+def get_section_string_id(section_id_int: int) -> str | None:
+    """
+    Convert DentApp API section_id integer to agent section ID string (reverse mapping).
+
+    This is used when frontend sends database IDs and we need to convert to
+    internal LangGraph string identifiers.
+
+    Args:
+        section_id_int: Section ID integer from database (e.g., 48, 46)
+
+    Returns:
+        String section_id for agent (e.g., "pain", "icp"), or None if not found
+    """
+    # Create reverse mapping
+    reverse_mapping = {v: k for k, v in SECTION_ID_MAPPING.items()}
+    section_id_str = reverse_mapping.get(section_id_int)
+    if section_id_str is None:
+        logger.error(f"Unknown section ID integer: {section_id_int}")
+    return section_id_str
 
 
 def tiptap_to_plain_text(tiptap_json: dict[str, Any]) -> str:

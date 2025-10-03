@@ -34,7 +34,7 @@ Sync LangGraph state with manually edited section content.
 
 **Path Parameters:**
 - `agent_id` (string): Agent identifier (currently only `"value-canvas"` is supported)
-- `section_id` (string): Section identifier (e.g., `"interview"`, `"icp"`, `"pain"`)
+- `section_id` (integer): Section ID from database (e.g., `45` for interview, `46` for icp, `48` for pain)
 
 **Query Parameters:**
 - `user_id` (integer): User identifier
@@ -43,7 +43,7 @@ Sync LangGraph state with manually edited section content.
 #### Request Example
 
 ```bash
-curl -X POST "http://localhost:8080/sync_section/value-canvas/interview?user_id=1&thread_id=abc-123-def-456" \
+curl -X POST "http://localhost:8080/sync_section/value-canvas/45?user_id=1&thread_id=abc-123-def-456" \
   -H "Content-Type: application/json"
 ```
 
@@ -109,12 +109,14 @@ curl -X POST "http://localhost:8080/sync_section/value-canvas/interview?user_id=
 
 ```javascript
 // After user saves their edits to the database
+// Note: sectionId should be the database integer ID (e.g., 45, 46, 48)
 async function handleSectionEdit(sectionId, userId, threadId) {
   try {
     // 1. Save edited content to database (your existing save logic)
     await saveSectionToDatabase(sectionId, editedContent);
 
     // 2. Trigger state sync
+    // Use the database section ID directly (integer)
     const response = await fetch(
       `/sync_section/value-canvas/${sectionId}?user_id=${userId}&thread_id=${threadId}`,
       {
@@ -138,23 +140,29 @@ async function handleSectionEdit(sectionId, userId, threadId) {
     // Handle error (show notification to user, etc.)
   }
 }
+
+// Example usage:
+// handleSectionEdit(45, 1, 'abc-123-def-456');  // For interview section
+// handleSectionEdit(48, 1, 'abc-123-def-456');  // For pain section
 ```
 
 ## Supported Sections
 
 The following sections are currently supported for sync:
 
-| Section ID | Model Class | Description |
-|-----------|-------------|-------------|
-| `interview` | `InterviewData` | Initial interview information |
-| `icp` | `ICPData` | Ideal Client Persona |
-| `icp_stress_test` | `ICPData` | ICP Stress Test (saves to ICP) |
-| `pain` | `PainData` | Pain points (3 pain points) |
-| `deep_fear` | `DeepFearData` | Deep Fear analysis |
-| `payoffs` | `PayoffsData` | Payoffs (3 payoffs) |
-| `signature_method` | `SignatureMethodData` | Signature Method with principles |
-| `mistakes` | `MistakesData` | Common mistakes |
-| `prize` | `PrizeData` | Prize/transformation statement |
+| Database ID | Internal String ID | Model Class | Description |
+|------------|-------------------|-------------|-------------|
+| `45` | `interview` | `InterviewData` | Initial interview information |
+| `46` | `icp` | `ICPData` | Ideal Client Persona |
+| `47` | `icp_stress_test` | `ICPData` | ICP Stress Test (saves to ICP) |
+| `48` | `pain` | `PainData` | Pain points (3 pain points) |
+| `49` | `deep_fear` | `DeepFearData` | Deep Fear analysis |
+| `50` | `payoffs` | `PayoffsData` | Payoffs (3 payoffs) |
+| `52` | `signature_method` | `SignatureMethodData` | Signature Method with principles |
+| `53` | `mistakes` | `MistakesData` | Common mistakes |
+| `54` | `prize` | `PrizeData` | Prize/transformation statement |
+
+**Note:** Use the Database ID when calling the API endpoint. The Internal String ID is used internally by LangGraph and is automatically mapped by the backend.
 
 ## Technical Details
 

@@ -8,6 +8,7 @@ from schema.schema import (
     Feedback,
     FeedbackResponse,
     InvokeResponse,
+    RefineSectionInput,
     ServiceMetadata,
     StreamInput,
     UserInput,
@@ -26,4 +27,5 @@ __all__ = [
     "ChatHistoryInput",
     "ChatHistory",
     "EndpointInfo",
+    "RefineSectionInput",
 ]

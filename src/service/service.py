@@ -37,7 +37,7 @@ from agents.value_canvas.agent import initialize_value_canvas_state
 from agents.value_canvas.prompts import SECTION_TEMPLATES as VALUE_CANVAS_TEMPLATES
 from core import settings
 from core.settings import DatabaseType
-from integrations.dentapp.dentapp_utils import SECTION_ID_MAPPING
+from integrations.dentapp.dentapp_utils import SECTION_ID_MAPPING, get_section_string_id
 from memory import initialize_database, initialize_store, pg_manager
 from schema import (
     ChatHistory,
@@ -46,6 +46,7 @@ from schema import (
     Feedback,
     FeedbackResponse,
     InvokeResponse,
+    RefineSectionInput,
     ServiceMetadata,
     StreamInput,
     UserInput,
@@ -236,14 +237,27 @@ async def info() -> ServiceMetadata:
             EndpointInfo(
                 path="/sync_section/{agent_id}/{section_id}",
                 method="POST",
-                description="Sync LangGraph state with manually edited section content from database. Uses LLM to extract structured data from Tiptap text and updates agent state.",
+                description="Sync LangGraph state with manually edited section content from database. Uses LLM to extract structured data from Tiptap text and updates agent state. Common section IDs: 45=interview, 46=icp, 48=pain, 49=deep_fear, 50=payoffs, 52=signature_method, 53=mistakes, 54=prize.",
                 parameters={
                     "agent_id": "Agent identifier (currently only 'value-canvas' supported)",
-                    "section_id": "Section identifier (e.g., 'interview', 'icp', 'pain', 'deep_fear', 'payoffs', 'signature_method', 'mistakes', 'prize')",
+                    "section_id": "Section ID integer from database (e.g., 48 for pain, 46 for icp, 45 for interview)",
                     "user_id": "User identifier (required query parameter)",
                     "thread_id": "Thread/conversation identifier (required query parameter)"
                 },
-                example="/sync_section/value-canvas/icp?user_id=12&thread_id=3ab280c6-44ee-416d-87f9-73aad616c8ec"
+                example="/sync_section/value-canvas/48?user_id=12&thread_id=3ab280c6-44ee-416d-87f9-73aad616c8ec"
+            ),
+            EndpointInfo(
+                path="/refine_section/{agent_id}/{section_id}",
+                method="POST",
+                description="Refine section content using AI. Accepts JSON body with user_id, thread_id, and refinement_prompt. Returns refined content (plain text + Tiptap format). Does NOT save to database. Common section IDs: 45=interview, 46=icp, 48=pain, 49=deep_fear, 50=payoffs, 52=signature_method, 53=mistakes, 54=prize.",
+                parameters={
+                    "agent_id": "Agent identifier - path parameter (currently only 'value-canvas' supported)",
+                    "section_id": "Section ID integer from database - path parameter (e.g., 48 for pain, 46 for icp, 45 for interview)",
+                    "body.user_id": "User identifier (integer, required in JSON body)",
+                    "body.thread_id": "Thread/conversation identifier (string, required in JSON body)",
+                    "body.refinement_prompt": "User's refinement instruction (string, can be long text, required in JSON body)"
+                },
+                example='curl -X POST http://localhost:8080/refine_section/value-canvas/48 -H "Content-Type: application/json" -d \'{"user_id": 12, "thread_id": "3ab280c6-44ee-416d-87f9-73aad616c8ec", "refinement_prompt": "Make it more concise"}\''
             ),
         ]
     )
@@ -824,7 +838,7 @@ def history(input: ChatHistoryInput) -> ChatHistory:
 @router.get("/section_states/{agent_id}/{section_id}")
 async def notify_section_update(
     agent_id: str,
-    section_id: str,
+    section_id: int,
     user_id: int,
     thread_id: str | None = None,
 ):
@@ -834,23 +848,34 @@ async def notify_section_update(
     This endpoint always:
     - Triggers a minimal Agent run to reload latest content for the section
     - Returns an AI prompt (single message) and the latest section status/draft
+
+    Args:
+        agent_id: Agent identifier (e.g., "value-canvas")
+        section_id: Section ID integer from database (e.g., 48 for pain, 46 for icp)
+        user_id: User identifier
+        thread_id: Thread/conversation identifier (required)
     """
     # Log section update request
     logger.info(f"=== SECTION_UPDATE_REQUEST: agent_id={agent_id}, section_id={section_id} ===")
     logger.info(f"SECTION_UPDATE_REQUEST: user_id={user_id}")
     logger.info(f"SECTION_UPDATE_REQUEST: thread_id={thread_id}")
 
+    # Convert section_id integer to string identifier for internal use
+    section_id_str = get_section_string_id(section_id)
+    if not section_id_str:
+        raise HTTPException(status_code=422, detail=f"Invalid section_id: {section_id}")
+
     # Require thread_id to ensure updates are scoped to the correct document/thread
     if not thread_id:
         raise HTTPException(status_code=422, detail="Missing required parameter: thread_id")
     # Validate section_id
-    if section_id not in SECTION_TEMPLATES:
+    if section_id_str not in SECTION_TEMPLATES:
         raise HTTPException(status_code=422, detail=f"Unknown section_id: {section_id}")
 
     # Trigger a minimal graph run to refresh context
     agent: AgentGraph = get_agent(agent_id)
     notify_msg = (
-        f"I just updated section '{section_id}' in the UI. "
+        f"I just updated section '{section_id_str}' in the UI. "
         f"Please reload the latest content from the database for this section, "
         f"then ask me whether to continue to the next step or refine this section."
     )
@@ -862,7 +887,7 @@ async def notify_section_update(
         await agent.ainvoke(**kwargs, stream_mode=["updates", "values"])  # type: ignore
 
         # Log successful section update
-        logger.info(f"=== SECTION_UPDATE_SUCCESS: agent_id={agent_id}, section_id={section_id} ===")
+        logger.info(f"=== SECTION_UPDATE_SUCCESS: agent_id={agent_id}, section_id={section_id} (string_id={section_id_str}) ===")
         logger.info(f"SECTION_UPDATE_SUCCESS: user_id={user_id}")
         logger.info(f"SECTION_UPDATE_SUCCESS: thread_id={thread_id}")
 
@@ -879,7 +904,7 @@ async def notify_section_update(
 @router.post("/sync_section/{agent_id}/{section_id}")
 async def sync_section(
     agent_id: str,
-    section_id: str,
+    section_id: int,
     user_id: int,
     thread_id: str,
 ):
@@ -898,7 +923,7 @@ async def sync_section(
 
     Args:
         agent_id: Agent identifier (e.g., "value-canvas")
-        section_id: Section identifier (e.g., "interview", "icp")
+        section_id: Section ID integer from database (e.g., 48 for pain, 46 for icp)
         user_id: User identifier
         thread_id: Thread/conversation identifier
 
@@ -909,6 +934,11 @@ async def sync_section(
     logger.info(f"=== SYNC_SECTION_REQUEST: agent_id={agent_id}, section_id={section_id} ===")
     logger.info(f"SYNC_SECTION_REQUEST: user_id={user_id}")
     logger.info(f"SYNC_SECTION_REQUEST: thread_id={thread_id}")
+
+    # Convert section_id integer to string identifier for internal use
+    section_id_str = get_section_string_id(section_id)
+    if not section_id_str:
+        raise HTTPException(status_code=422, detail=f"Invalid section_id: {section_id}")
 
     # Validate required parameters
     if not thread_id:
@@ -940,12 +970,12 @@ async def sync_section(
         result = await sync_section_from_database(
             user_id=user_id,
             thread_id=thread_id,
-            section_id=section_id,
+            section_id=section_id_str,
             agent_graph=agent
         )
 
         # Log successful sync
-        logger.info(f"=== SYNC_SECTION_SUCCESS: agent_id={agent_id}, section_id={section_id} ===")
+        logger.info(f"=== SYNC_SECTION_SUCCESS: agent_id={agent_id}, section_id={section_id} (string_id={section_id_str}) ===")
         logger.info(f"SYNC_SECTION_SUCCESS: extracted_fields={result.get('extracted_fields', [])}")
         logger.info(f"SYNC_SECTION_SUCCESS: content_length={result.get('content_length', 0)}")
 
@@ -965,10 +995,8 @@ async def sync_section(
 @router.post("/refine_section/{agent_id}/{section_id}")
 async def refine_section(
     agent_id: str,
-    section_id: str,
-    user_id: int,
-    thread_id: str,
-    refinement_prompt: str,
+    section_id: int,
+    request: RefineSectionInput,
 ):
     """
     Refine section content using AI based on user's instruction.
@@ -988,27 +1016,32 @@ async def refine_section(
     4. If user accepts, frontend saves to DentApp API and calls /sync_section
 
     Args:
-        agent_id: Agent identifier (e.g., "value-canvas")
-        section_id: Section identifier (e.g., "interview", "icp")
-        user_id: User identifier
-        thread_id: Thread/conversation identifier
-        refinement_prompt: User's instruction for how to refine the content
+        agent_id: Agent identifier (e.g., "value-canvas") - path parameter
+        section_id: Section ID integer from database (e.g., 48 for pain, 46 for icp) - path parameter
+        request: Request body containing user_id, thread_id, and refinement_prompt
 
     Returns:
         Refinement result with refined content in both plain text and Tiptap format
     """
+    # Extract parameters from request body
+    user_id = request.user_id
+    thread_id = request.thread_id
+    refinement_prompt = request.refinement_prompt
+
     # Log refine request
     logger.info(f"=== REFINE_SECTION_REQUEST: agent_id={agent_id}, section_id={section_id} ===")
     logger.info(f"REFINE_SECTION_REQUEST: user_id={user_id}")
     logger.info(f"REFINE_SECTION_REQUEST: thread_id={thread_id}")
     logger.info(f"REFINE_SECTION_REQUEST: refinement_prompt={refinement_prompt[:100]}...")
 
-    # Validate required parameters
-    if not thread_id:
-        raise HTTPException(status_code=422, detail="Missing required parameter: thread_id")
+    # Convert section_id integer to string identifier for internal use
+    section_id_str = get_section_string_id(section_id)
+    if not section_id_str:
+        raise HTTPException(status_code=422, detail=f"Invalid section_id: {section_id}")
 
-    if not refinement_prompt or not refinement_prompt.strip():
-        raise HTTPException(status_code=422, detail="Missing required parameter: refinement_prompt")
+    # Validate refinement_prompt is not just whitespace
+    if not refinement_prompt.strip():
+        raise HTTPException(status_code=422, detail="refinement_prompt cannot be empty or whitespace only")
 
     # Only value-canvas agent is supported for now
     if agent_id != "value-canvas":
@@ -1036,13 +1069,13 @@ async def refine_section(
         result = await refine_section_content(
             user_id=user_id,
             thread_id=thread_id,
-            section_id=section_id,
+            section_id=section_id_str,
             refinement_prompt=refinement_prompt,
             agent_graph=agent
         )
 
         # Log successful refinement
-        logger.info(f"=== REFINE_SECTION_SUCCESS: agent_id={agent_id}, section_id={section_id} ===")
+        logger.info(f"=== REFINE_SECTION_SUCCESS: agent_id={agent_id}, section_id={section_id} (string_id={section_id_str}) ===")
         logger.info(f"REFINE_SECTION_SUCCESS: refined_content_length={len(result.get('refined_content', {}).get('plain_text', ''))}")
 
         return result
