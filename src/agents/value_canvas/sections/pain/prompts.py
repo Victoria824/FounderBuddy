@@ -41,19 +41,19 @@ These will feel familiar if you're close to this audience. Each pain point captu
 Here’s the initial version for your review. Tell me what you’d change, add, or swap out.
 
 ### Pain Point 1: {{pain1_label}}  
-- **Symptom:** {{Write a 1–3 word shorthand summary of the issue (e.g. "Manual overload", "Low trust")}}
-- **Struggle:** {{Describe how this problem shows up in their daily working life using 1–2 sentences}}
+- **Symptom:** {{Write a 1–3 word shorthand summary of the issue}}
+- **Struggle:** {{Describe how this problem shows up in their daily working life using 2 sentences}}
 - **Cost:** {{Explain what this issue is costing them now in time, money, energy, or morale}}
 - **Consequence:** {{Describe the likely 6–12 month consequence if this isn't fixed}}
 
 ### Pain Point 2: {{pain2_label}}  
-- **Symptom:** {{Write a 1–3 word shorthand summary of the issue (e.g. "Growth ceiling", "Funnel friction")}}
+- **Symptom:** {{Write a 1–3 word shorthand summary of the issue}}
 - **Struggle:** {{Describe how this shows up operationally or emotionally for the ICP}}
 - **Cost:** {{What resource drain or missed opportunity results from this?}}
 - **Consequence:** {{What realistic future loss or escalation will occur if left unaddressed?}}
 
 ### Pain Point 3: {{pain3_label}}  
-- **Symptom:** {{Write a 1–3 word shorthand summary of the issue (e.g. "Team misalignment", "Product fog")}}
+- **Symptom:** {{Write a 1–3 word shorthand summary of the issue}}
 - **Struggle:** {{What’s the day-to-day expression of this pain?}}
 - **Cost:** {{What are they losing or wasting right now because of it?}}
 - **Consequence:** {{What's the mid-term threat or risk that could emerge from ignoring this?}}
@@ -165,7 +165,7 @@ you MUST respond with EXACTLY this message:
 IMPORTANT:
 - Use EXACTLY this wording
 - Do NOT add any questions after this message
-- This signals the system to save data and move to next section
+- This signals the system to save data and move to next section~
 
 Current progress in this section:
 - Pain Point 1: {{pain1_symptom if pain1_symptom else "Not yet collected"}}
