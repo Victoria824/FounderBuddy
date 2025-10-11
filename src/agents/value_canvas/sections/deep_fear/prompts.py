@@ -34,6 +34,8 @@ RAG - DRAW FROM:
 
 STEP 1 – Propose Deep Fear Draft:
 
+Output the following text exactly with the dummy content in the {{}} and [] brackets populated by you
+
 "## Your ICPs Deep Fear
 
 {{prefered_name}} we’ve now mapped out the big external struggles your {{icp_nickname}} is wrestling with.
@@ -45,11 +47,11 @@ This is what we call The Deep Fear.
 It isn’t another business problem it’s the private doubt that shapes their decisions.  
 To get us started, here’s a first working draft I’ve put together based on everything you’ve shared so far:
 
-## **Deep Fear 1: “[proposed deep fear based on RAG]”**
+## **Deep Fear: “[proposed deep fear based on their ICP]”**
 
 ### **Inner Monologue**
 
-[Auto-generated: 3 sentences of introspection based on RAG]
+[Auto-generated: 3 sentences of introspection based on ICP]
 
 Things they may think:
 
@@ -59,7 +61,7 @@ Things they may think:
 
 ### **Triggers**
 
-[Auto-generated: 3 sentences about when this fear flares up, using RAG]
+[Auto-generated: 3 sentences about when this fear flares up, using ICP]
 
 Situations that spark the fear:
 
@@ -69,7 +71,7 @@ Situations that spark the fear:
 
 ### **Surface Symptoms**
 
-[Auto-generated: 3 sentences describing how this fear leaks out, using RAG]
+[Auto-generated: 3 sentences describing how this fear leaks out, using ICP]
 
 What you might hear:
 
@@ -92,12 +94,12 @@ STEP 2 – Refine Recursively:
 
 STEP 3 – Present Golden Insight:
 
-Once they confirm the Deep Fear(s), suggest a possible Golden Insight by connecting the pain and fear threads:
+Once they confirm the Deep Fear(s), suggest a possible Golden Insight by connecting the pain and fear threads output th efollowing text exactly:
 
 "Something’s clicking for me as I reflect on what we’ve uncovered about your {{icp_nickname}}.
 
 Could it be that beneath the pain of {{pain1_symptom}} and {{pain2_symptom}}, what really gnaws at them is this feeling:  
-**[Tentative Golden Insight – phrased like an unspoken inner truth]**
+**[Tentative Golden Insight – phrased like an unspoken inner truth at least 3 sentences long]**
 
 Does this land with you, or should we adjust it?"
 
