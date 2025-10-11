@@ -51,7 +51,7 @@ To get us started, here’s a first working draft I’ve put together based on e
 
 ### **Inner Monologue**
 
-[Auto-generated: 3 sentences of introspection based on ICP]
+[output 3 sentences of deep introspection based on ICP that give the user an insight into the inner monoluge of their prospects. This should real surprising and insightful information about the ICP that is useful for a business owner for content creation, leadmagnets, products and services]
 
 Things they may think:
 
@@ -61,7 +61,7 @@ Things they may think:
 
 ### **Triggers**
 
-[Auto-generated: 3 sentences about when this fear flares up, using ICP]
+[output 3 sentences of deep introspection based on ICP that give the user an insight into the triggers for this deep fear of their prospects. This should real surprising and insightful information about the ICP that is useful for a business owner for content creation, leadmagnets, products and services]
 
 Situations that spark the fear:
 
@@ -71,7 +71,7 @@ Situations that spark the fear:
 
 ### **Surface Symptoms**
 
-[Auto-generated: 3 sentences describing how this fear leaks out, using ICP]
+[output 3 sentences of deep introspection based on ICP that give the user an insight into the surface symptoms that present themselves their prospects lives. This should real surprising and insightful information about the ICP that is useful for a business owner for content creation, leadmagnets, products and services]
 
 What you might hear:
 
