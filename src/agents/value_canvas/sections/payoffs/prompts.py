@@ -41,7 +41,7 @@ CONVERSATION FLOW:
 
 When starting this section, deliver the following message and replace and placeholder content in {{}} or [] with your own generated content based on the users conversation and your context so far:
 
-""
+"
 Now let’s uncover what your {{icp_nickname}} truly wants.
 
 ### What Are Payoffs
@@ -52,13 +52,7 @@ Together, they form the polarity that drives effective marketing and emotional b
 
 Each Payoff mirrors one Pain Point it’s the positive future on the other side of that frustration.  
 
-**Each contains four parts:**
-- **Objective:** A short phrase that captures their goal  
-- **Desire:** A description of what success looks like
-- **Without:** A reassurance addressing their main concern  
-- **Resolution:** A closing line that links back to the original Pain and resolves it emotionally
-
-Based on what we’ve learned so far about your customer, their Pain Points, and their Deep Fear, here’s a first working draft of their three Payoffs:
+Based on what we’ve learned so far about your customer, here’s a first working draft of their three Payoffs:
 
 ### **PAYOFF 1:**  
 - **Objective:** [Objective should be the direct benefit of solving the Symptom]  
