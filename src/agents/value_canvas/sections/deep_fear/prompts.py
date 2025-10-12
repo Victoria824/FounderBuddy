@@ -33,52 +33,55 @@ RAG - DRAW FROM:
   
 Output the following message whilst modify the content within `{{ }}` and `[ ]`.
 
-"## Your ICPs Deep Fear
+"## Your ICP's Deep Fear
 
-{{prefered_name}} we’ve now mapped out the big external struggles your {{icp_nickname}} is wrestling with.
+{{prefered_name}}, we’ve now mapped out the big external struggles your {{icp_nickname}} is wrestling with.
 
-But let’s go a layer deeper. Behind every business challenge sits a more personal question the kind of thing your {{icp_nickname}} thinks about in quiet moments but would never say out loud in a meeting.
+But let’s go a layer deeper.
 
-This is what we call The Deep Fear.  
+Behind every visible problem is a private question the kind of thing your {{icp_nickname}} would never say out loud in a meeting, but which quietly shapes how they act, what they buy, and what they avoid.
 
-It isn’t another business problem it’s the private doubt that shapes their decisions.  
-To get us started, here’s a first working draft I’ve put together based on everything you’ve shared so far:
+This is what we call **The Deep Fear**.
 
-## **Deep Fear: “[proposed deep fear based on their ICP]”**
+It’s not another business issue it’s the emotional core behind why they stay stuck, hesitate, or overcompensate. 
+When you can name it clearly, you gain language that turns your marketing from informative to magnetic.
 
-### **Inner Monologue**
+### **Deep Fear:**  
+*"{{deep_fear}} [Write this as a single first‑person inner confession that your ICP would never say aloud but thinks often. It should feel raw, truthful, and emotionally charged]"*
 
-[replace this bracket with 5 sentences of deep introspection based on ICP that give the user an insight into the inner monoluge of their prospects. This should real surprising and insightful information about the ICP that is useful for a business owner for content creation, leadmagnets, products and services]
+### **Inner Monologue**  
+This is the ongoing self‑talk that reinforces that fear the thoughts that quietly drive their decisions.
 
-Things they may think:
+They may think things like:
+- "{{inner_thought_1}}"  
+- "{{inner_thought_2}}"  
+- "{{inner_thought_3}}"
 
-- “[generated inner thought 1]”  
-- “[generated inner thought 2]”  
-- “[generated inner thought 3]”  
+These lines give you language for empathy‑based content, helping your {{icp_nickname}} feel deeply understood.
 
-### **Triggers**
+### **Triggers**  
+These are the moments or experiences that reactivate the fear often catching them off‑guard or fuelling hesitation.
 
-[replace this bracket with 5 sentences of deep introspection based on ICP that give the user an insight into the triggers for this deep fear of their prospects. This should real surprising and insightful information about the ICP that is useful for a business owner for content creation, leadmagnets, products and services]
+Typical trigger moments:
+- "{{trigger_1}}"  
+- "{{trigger_2}}"  
+- "{{trigger_3}}"
 
-Situations that spark the fear:
+Knowing these helps you anticipate emotional turning points in your messaging and offers.
 
-- “[generated trigger 1]”  
-- “[generated trigger 2]”  
-- “[generated trigger 3]”  
-
-### **Surface Symptoms**
-
-[replace this bracket with 5 sentences of deep introspection based on ICP that give the user an insight into the surface symptoms that present themselves their prospects lives. This should real surprising and insightful information about the ICP that is useful for a business owner for content creation, leadmagnets, products and services]
+### **Surface Symptoms**  
+These are the visible behaviours or statements that reveal the fear indirectly the clues you’ll hear in everyday conversation.
 
 What you might hear:
+- "{{symptom_1}}"  
+- "{{symptom_2}}"  
+- "{{symptom_3}}"
 
-- “[generated symptom 1]”  
-- “[generated symptom 2]”  
-- “[generated symptom 3]”
+By recognising these, you can respond to what they *mean*, not just what they *say*.
 
 Does this feel close to what your {{icp_nickname}} might secretly worry about?  
+Would you like to refine this further, or change it entirely?
 
-Would you like to refine this further, or change it entirely?  
 I can help you shape it into something that truly resonates."
 
 ## STEP 2 – Refine Recursively:
@@ -89,16 +92,29 @@ I can help you shape it into something that truly resonates."
   “Let’s dial it in. Which part do you feel needs the most adjustment the core fear, inner voice, triggers, or symptoms?”
 - Continue iterating until the user is satisfied
 
-## STEP 3 – Present Golden Insight:
+## STEP 3 – Present the Strategic Golden Insight
 
-Once they confirm the Deep Fear(s), suggest a possible Golden Insight by connecting the pain and fear threads output th efollowing text exactly:
+Once the user confirms their Deep Fear is accurate, use this moment to help them zoom out and see the bigger psychological pattern behind it — the unspoken emotional truth that ties together the Pain, the Fear, and the Payoffs.
+You're not just naming a feeling — you're uncovering the story their ICP is secretly living in.
+
+This Golden Insight is the hidden emotional logic behind why they hesitate, self-sabotage, or delay taking action — and why, when someone *finally names it*, they lean in.
+
+Output the following message. Replace only the content in `{{}}` and the `[ ]` bracket, which contains clear subprompt instructions.
 
 "Something’s clicking for me as I reflect on what we’ve uncovered about your {{icp_nickname}}.
 
-Could it be that beneath the pain of {{pain1_symptom}} and {{pain2_symptom}}, what really gnaws at them is this feeling:  
-**[Golden Insight phrased like an unspoken inner truth that you make at least 3 sentences long that reveals an even deeper level of insight for the user about their ICP, their deep fear and how that might be useful for them to help them grow their business]**
+Let’s try to surface the deeper emotional pattern the thing they’re *really* afraid of, and what they’re *quietly hoping someone will help them reclaim.*
 
-Does this land with you, or should we adjust it?"
+Could it be that beneath the pain of '{{pain1_symptom}}' and '{{pain2_symptom}}', what really gnaws at them is this deeper truth:
+
+**[Golden Insight — Write this as a raw, human truth. A confession your ICP might never say aloud, but which secretly explains why they stay stuck. It should be at least 3 sentences. It should feel both vulnerable and strategic — something the user could use in brand messaging, sales calls, video scripts, or social content.]**
+
+### You can use it to:
+- Write hooks that instantly resonate  
+- Build products that actually meet them where they are  
+- Sell transformation instead of features
+
+Does this land with you, or should we sharpen it further?"
 
 ## STEP 4 – Next Section Transition:
 
