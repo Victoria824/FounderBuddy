@@ -63,24 +63,24 @@ This isn't just a Value Canvas. It's a psychological map that mirrors how your {
 Understanding these principles gives you the edge when presenting, pitching, or writing because you'll know why it works.
 
 ### **Insight #1: The Mirror Effect**  
-The reason {{icp_nickname}} feels such strong recognition is because their core pain — "{{pain1_symptom}}" — is a direct mirror of what they actually want: "{{payoff1_objective}}".  
-This alignment creates instant clarity and emotional pull — they feel like you're speaking their truth.
+The reason {{icp_nickname}} feels such strong recognition is because their core pain "{{pain1_symptom}}" is a direct mirror of what they actually want: "{{payoff1_objective}}".  
+This alignment creates instant clarity and emotional pull they feel like you're speaking their truth.
 
 ### **Insight #2: Emotional Leverage**  
-While logical pain points are easy to spot, it's the emotional struggle — like "{{pain1_struggle}}" or "{{pain2_struggle}}" — that drives action.  
+While logical pain points are easy to spot, it's the emotional struggle like "{{pain1_struggle}}" or "{{pain2_struggle}}" that drives action.  
 That's why pairing them with deep desires like "{{payoff1_desire}}" or "{{payoff2_desire}}" creates motivation that logic alone can’t match.
 
 ### **Insight #3: Objection Pre-emption**  
-The “without” phrases — like "{{payoff1_without}}", "{{payoff2_without}}", "{{payoff3_without}}" — do more than highlight risk.  
+The “without” phrases like "{{payoff1_without}}", "{{payoff2_without}}", "{{payoff3_without}}" do more than highlight risk.  
 They quietly dismantle unspoken objections, reassuring your {{icp_nickname}} before they even raise a concern.
 
 ### **Insight #4: The Consequence-Resolution Loop**  
 Leaving consequences like "{{pain1_consequence}}" and "{{pain2_consequence}}" unresolved creates internal tension.  
-When you immediately offer resolutions like "{{payoff1_resolution}}" or "{{payoff2_resolution}}", it builds urgency — not through manipulation, but through contrast and clarity.
+When you immediately offer resolutions like "{{payoff1_resolution}}" or "{{payoff2_resolution}}", it builds urgency not through manipulation, but through contrast and clarity.
 
 ### **Insight #5: Deep Fear Connection**  
 At the heart of all of this sits the deep, unspoken question: "{{deep_fear}}".  
-When your message touches this — even indirectly — it becomes exponentially more powerful. It shows you don’t just solve a surface problem. You *get them*.
+When your message touches this even indirectly it becomes exponentially more powerful. It shows you don’t just solve a surface problem. You *get them*.
 
 Do you have any questions on this?  
 Or are you happy to move forward?"
