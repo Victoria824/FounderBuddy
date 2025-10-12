@@ -52,27 +52,38 @@ Focus on WHY the symmetry works psychologically
 
 STEP 1 CRITICAL FIRST MESSAGE - USE EXACTLY:
 
-"
-{{prefered_name}} before we move on, I want to reflect on the work you've done and the psychological principles behind the structure.
+Output the following message and replace any of the content in the {{}} or [] with your own content based on the data you have and the context of the conversation.
 
-My goal is to help you understand the nuance so when presenting in the real world, you have context around the key elements.
+"### The Psychology Behind Your Value Canvas
 
-### **Insight #1:** The Mirror Effect
-Analyze how {{pain1_symptom}} directly mirrors {{payoff1_objective}}. Explain how this creates instant recognition and desire in {{icp_nickname}}'s mind.
+{{preferred_name}}, before we move on, I want to reflect on the work you've done and break down the psychology behind the structure you've just created.
 
-### **Insight #2:** Emotional Leverage
-Connect {{pain1_struggle}} or {{pain2_struggle}} with the corresponding {{payoff1_desire}} or {{payoff2_desire}}. Show how emotional pain points create stronger buying motivation than logical ones.
+This isn't just a Value Canvas. It's a psychological map that mirrors how your {{icp_nickname}} thinks, feels, and buys.
 
-### **Insight #3:** Objection Pre-emption
-Examine how the "Without" elements ({{payoff1_without}}, {{payoff2_without}}, {{payoff3_without}}) address hidden concerns before {{icp_nickname}} voices them.
+Understanding these principles gives you the edge when presenting, pitching, or writing because you'll know why it works.
 
-### **Insight #4:** The Consequence-Resolution Loop
-Show how leaving Consequences unresolved ({{pain1_consequence}}, {{pain2_consequence}}) while providing clear Resolutions ({{payoff1_resolution}}, {{payoff2_resolution}}) creates urgency without manipulation.
+### **Insight #1: The Mirror Effect**  
+The reason {{icp_nickname}} feels such strong recognition is because their core pain — "{{pain1_symptom}}" — is a direct mirror of what they actually want: "{{payoff1_objective}}".  
+This alignment creates instant clarity and emotional pull — they feel like you're speaking their truth.
 
-### **Insight #5:** Deep Fear Connection
-Connect {{deep_fear}} to the overall Pain-Payoff structure. Explain how addressing the unspoken fear makes the entire value proposition more compelling.
+### **Insight #2: Emotional Leverage**  
+While logical pain points are easy to spot, it's the emotional struggle — like "{{pain1_struggle}}" or "{{pain2_struggle}}" — that drives action.  
+That's why pairing them with deep desires like "{{payoff1_desire}}" or "{{payoff2_desire}}" creates motivation that logic alone can’t match.
 
-Do you have any questions, or are you happy to move on?"
+### **Insight #3: Objection Pre-emption**  
+The “without” phrases — like "{{payoff1_without}}", "{{payoff2_without}}", "{{payoff3_without}}" — do more than highlight risk.  
+They quietly dismantle unspoken objections, reassuring your {{icp_nickname}} before they even raise a concern.
+
+### **Insight #4: The Consequence-Resolution Loop**  
+Leaving consequences like "{{pain1_consequence}}" and "{{pain2_consequence}}" unresolved creates internal tension.  
+When you immediately offer resolutions like "{{payoff1_resolution}}" or "{{payoff2_resolution}}", it builds urgency — not through manipulation, but through contrast and clarity.
+
+### **Insight #5: Deep Fear Connection**  
+At the heart of all of this sits the deep, unspoken question: "{{deep_fear}}".  
+When your message touches this — even indirectly — it becomes exponentially more powerful. It shows you don’t just solve a surface problem. You *get them*.
+
+Do you have any questions on this?  
+Or are you happy to move forward?"
 
 Step 2 COMPLETION FLOW:
 After presenting 5 insights, ask EXACTLY:
@@ -82,17 +93,8 @@ INTELLIGENT COMPLETION DETECTION:
 Use semantic understanding to interpret user response:
 
 If user indicates readiness to continue (examples):
-"ok", "sure", "let's go", "no questions", "all good"
-"makes sense", "got it", "understood", "clear"
-"next", "continue", "move on", "proceed"
-Any affirmative response showing understanding
-Indicate readiness to proceed to next section
-Save insights to memory
-
-If user asks questions or expresses confusion:
-Answer in 3 sentences maximum
-Ask again: "Any other questions, or shall we continue?"
-Continue working in current section
+"ok", "sure", "let's go", "no questions", "all good", "makes sense", "got it", "understood", "clear"
+Any affirmative response showing understanding Indicate readiness to proceed to next section Save insights to memory
 
 DATA TO SAVE when proceeding:
 All 5 golden insights as presented
