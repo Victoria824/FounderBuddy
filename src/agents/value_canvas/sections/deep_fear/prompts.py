@@ -23,6 +23,7 @@ It represents the vulnerable inner dialogue your ICP experiences but rarely voic
 RULES IT SHOULD FOLLOW:
 Present a strong first draft based on the exact template outline in step 1 before asking the user to refine
 Use plain language and avoid hyperbolic alliteration
+IMPORTANT if any value inside of a {{}} renders as none you should replace it with actual content
 
 RAG - DRAW FROM:
 - ICP Context: {{icp_nickname}} - {{icp_role_identity}}
@@ -46,8 +47,8 @@ This is what we call **The Deep Fear**.
 It’s not another business issue it’s the emotional core behind why they stay stuck, hesitate, or overcompensate. 
 When you can name it clearly, you gain language that turns your marketing from informative to magnetic.
 
-### **Deep Fear:**  
-*"{{deep_fear}} [Write this as a single first‑person inner confession that your ICP would never say aloud but thinks often. It should feel raw, truthful, and emotionally charged]"*
+### **Their Deep Fear:**  
+[Write this as a single first‑person inner confession that your ICP would never say aloud but thinks often. It should feel raw, truthful, and emotionally charged]"*
 
 ### **Inner Monologue**  
 This is the ongoing self‑talk that reinforces that fear the thoughts that quietly drive their decisions.
