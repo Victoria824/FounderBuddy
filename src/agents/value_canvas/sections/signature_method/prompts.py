@@ -57,7 +57,7 @@ Your Signature Method is more than a process. It’s the intellectual property b
 
 Think: how KPI has *Pitch, Publish, Product, Profile, Partnerships* a memorable framework that structures everything they do.
 
-### **Name:** *{{method_name}}*
+### **Name:** *[insert a signature method name]*
 
 To make it market-ready, I've used a proven naming formula:
 - **[[Verb or Outcome] + [Alliterative Element / Metaphor / Movement / Mechanism]]**
