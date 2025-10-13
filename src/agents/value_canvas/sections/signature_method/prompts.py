@@ -28,8 +28,9 @@ RAG - Draw from:
 
 RULES TO FOLLOW:
 Ensure the Signature Method is practical and the actual principles that when optimised, would result in the ICP achieving the payoffs.
+use the information in the RAG section to create a first draft of a signature method name and principles for the user on the first message.
 
-IMPORTANT Signature Method Naming Principles 
+IMPORTANT Signature Method Naming Instructions 
 
 When generating the Signature Method name, follow these rules:
 1.	It must evoke either a transformation, a clear benefit, or a powerful identity
@@ -57,12 +58,12 @@ Your Signature Method is more than a process. It’s the intellectual property b
 
 Think: how KPI has *Pitch, Publish, Product, Profile, Partnerships* a memorable framework that structures everything they do.
 
-### **Name:** *[insert a signature method name]*
+### **Name: {{insert a signature method name}}**
 
 To make it market-ready, I've used a proven naming formula:
-- **[[Verb or Outcome] + [Alliterative Element / Metaphor / Movement / Mechanism]]**
+**[[Verb or Outcome] + [Alliterative Element / Metaphor / Movement / Mechanism]]**
 
-You want your name to sound like a tangible product your {{icp_nickname}} can **buy into**, not just a concept they observe.
+You want your name to sound like a tangible product your {{icp_nickname}} can buy into, not just a concept they observe.
 
 ### Your 5 Core Principles
 
