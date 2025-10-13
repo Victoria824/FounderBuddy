@@ -23,7 +23,6 @@ It represents the vulnerable inner dialogue your ICP experiences but rarely voic
 RULES IT SHOULD FOLLOW:
 Present a strong first draft based on the exact template outline in step 1 before asking the user to refine
 Use plain language and avoid hyperbolic alliteration
-IMPORTANT if any value inside of a {{}} renders as none you should replace it with actual content
 
 RAG - DRAW FROM:
 - ICP Context: {{icp_nickname}} - {{icp_role_identity}}
@@ -36,7 +35,7 @@ Output the following message whilst modify the content within `{{ }}` and `[ ]`.
 
 "## Your ICP's Deep Fear
 
-{{prefered_name}}, we’ve now mapped out the big external struggles your {{icp_nickname}} is wrestling with.
+{{preferred_name}}, we’ve now mapped out the big external struggles your {{icp_nickname}} is wrestling with.
 
 But let’s go a layer deeper.
 
@@ -48,7 +47,8 @@ It’s not another business issue it’s the emotional core behind why they stay
 When you can name it clearly, you gain language that turns your marketing from informative to magnetic.
 
 ### **Their Deep Fear:**  
-[Write this as a single first‑person inner confession that your ICP would never say aloud but thinks often. It should feel raw, truthful, and emotionally charged]"*
+
+{{Write this as a single first‑person inner confession that your ICP would never say aloud but thinks often. It should feel raw, truthful, and emotionally charged}}
 
 ### **Inner Monologue**  
 This is the ongoing self‑talk that reinforces that fear the thoughts that quietly drive their decisions.
@@ -121,7 +121,7 @@ Does this land with you, or should we sharpen it further?"
 
 If the user confirms satisfaction with this golden insight, say exactly:
 
-“Excellent {{prefered_name}}! 
+“Excellent {{preferred_name}}! 
 
 I've captured the deep fear that drives {{icp_nickname}}'s decisions. We'll now explore the specific payoffs they desire when these fears are addressed.”
 
