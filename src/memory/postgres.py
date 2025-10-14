@@ -59,6 +59,11 @@ class PostgresConnectionManager:
         connection_kwargs = {
             "autocommit": True,
             "row_factory": dict_row,
+            # Add connection health check parameters
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
         }
 
         # Create connection pool - use open=False to avoid deprecation warning
@@ -67,10 +72,12 @@ class PostgresConnectionManager:
             min_size=2,
             max_size=10,
             timeout=30.0,
-            max_lifetime=300.0,  # 5 minutes
-            max_idle=60.0,
+            max_lifetime=3600.0,  # 1 hour (increased from 5 minutes)
+            max_idle=600.0,  # 10 minutes (increased from 60 seconds)
             kwargs=connection_kwargs,
             open=False,  # Don't open connection pool in constructor
+            # Add connection check callback
+            check=AsyncConnectionPool.check_connection,
         )
         
         # Explicitly open connection pool

@@ -5,6 +5,7 @@ import logging
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
+from agents.message_utils import create_ai_message_with_metadata
 from core.llm import get_model
 
 from ..enums import SectionStatus
@@ -184,14 +185,19 @@ async def generate_reply_node(state: MissionPitchState, config: RunnableConfig) 
         # Store reply in state for decision node to use
         state["current_reply"] = reply_content
 
-        # Add AI reply to conversation history
-        state["messages"].append(AIMessage(content=reply_content))
+        # Add AI reply to conversation history with section metadata
+        ai_message = create_ai_message_with_metadata(
+            content=reply_content,
+            section_id=state["current_section"].value,
+            agent_name="mission-pitch"
+        )
+        state["messages"].append(ai_message)
 
         # Update short-term memory by appending new messages
         base_mem = state.get("short_memory", [])
         if last_human_msg is not None:
             base_mem.append(last_human_msg)
-        base_mem.append(AIMessage(content=reply_content))
+        base_mem.append(ai_message)
         state["short_memory"] = base_mem
 
         logger.info("DEBUG_REPLY_NODE: Reply generated successfully")
@@ -200,8 +206,13 @@ async def generate_reply_node(state: MissionPitchState, config: RunnableConfig) 
         logger.error(f"Failed to generate reply: {e}")
         default_reply = "Sorry, I encountered an error generating my response. Could you rephrase your question?"
         state["current_reply"] = default_reply
-        state["messages"].append(AIMessage(content=default_reply))
-        state.setdefault("short_memory", []).append(AIMessage(content=default_reply))
+        error_message = create_ai_message_with_metadata(
+            content=default_reply,
+            section_id=state["current_section"].value,
+            agent_name="mission-pitch"
+        )
+        state["messages"].append(error_message)
+        state.setdefault("short_memory", []).append(error_message)
     
     return state
 

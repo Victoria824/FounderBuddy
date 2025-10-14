@@ -52,6 +52,61 @@ def langchain_to_chat_message(message: BaseMessage) -> ChatMessage:
                 ai_message.tool_calls = message.tool_calls
             if message.response_metadata:
                 ai_message.response_metadata = message.response_metadata
+
+            # Extract section metadata from additional_kwargs
+            if message.additional_kwargs:
+                section_id_str = message.additional_kwargs.get("section_id")
+                agent_name = message.additional_kwargs.get("agent_name")
+
+                if section_id_str and agent_name:
+                    # Import mapping utilities
+                    from integrations.dentapp.dentapp_utils import SECTION_ID_MAPPING
+
+                    # Map section string ID to database integer ID
+                    section_id_int = SECTION_ID_MAPPING.get(section_id_str)
+
+                    # Get section name from agent templates
+                    section_name = None
+                    if agent_name == "value-canvas":
+                        from agents.value_canvas.prompts import SECTION_TEMPLATES
+                        template = SECTION_TEMPLATES.get(section_id_str)
+                        section_name = template.name if template else section_id_str.replace("_", " ").title()
+                    elif agent_name == "mission-pitch":
+                        from agents.mission_pitch.prompts import SECTION_TEMPLATES
+                        template = SECTION_TEMPLATES.get(section_id_str)
+                        section_name = template.name if template else section_id_str.replace("_", " ").title()
+                    elif agent_name == "social-pitch":
+                        from agents.social_pitch.prompts import SECTION_TEMPLATES
+                        template = SECTION_TEMPLATES.get(section_id_str)
+                        section_name = template.name if template else section_id_str.replace("_", " ").title()
+                    elif agent_name == "signature-pitch":
+                        from agents.signature_pitch.prompts import SECTION_TEMPLATES
+                        template = SECTION_TEMPLATES.get(section_id_str)
+                        section_name = template.name if template else section_id_str.replace("_", " ").title()
+                    elif agent_name == "special-report":
+                        from agents.special_report.prompts import SECTION_TEMPLATES
+                        template = SECTION_TEMPLATES.get(section_id_str)
+                        section_name = template.name if template else section_id_str.replace("_", " ").title()
+                    elif agent_name == "concept-pitch":
+                        from agents.concept_pitch.prompts import SECTION_TEMPLATES
+                        template = SECTION_TEMPLATES.get(section_id_str)
+                        section_name = template.name if template else section_id_str.replace("_", " ").title()
+                    else:
+                        # Fallback: format section_id_str nicely
+                        section_name = section_id_str.replace("_", " ").title()
+
+                    # Check if this message triggered a save operation
+                    # This flag is set by memory_updater node after successful save
+                    saved_section = message.additional_kwargs.get("triggered_save", False)
+
+                    # Add to custom_data
+                    ai_message.custom_data.update({
+                        "section_id": section_id_int,
+                        "section_name": section_name,
+                        "agent_name": agent_name,
+                        "saved_section": saved_section
+                    })
+
             return ai_message
         case ToolMessage():
             tool_message = ChatMessage(

@@ -138,8 +138,19 @@ async def memory_updater_node(state: ValueCanvasState, config: RunnableConfig) -
                     "satisfaction_feedback": agent_out.user_satisfaction_feedback,
                     "status": computed_status,
                 })
-                
+
                 logger.info(f"Successfully extracted and saved {section_id} data")
+
+                # Mark the last AI message as having triggered a save operation
+                for i in range(len(state["messages"]) - 1, -1, -1):
+                    msg = state["messages"][i]
+                    if isinstance(msg, AIMessage):
+                        if not msg.additional_kwargs:
+                            msg.additional_kwargs = {}
+                        msg.additional_kwargs["triggered_save"] = True
+                        logger.info(f"✅ MARKED message index {i} with triggered_save=True for section {section_id}")
+                        logger.info(f"   Message additional_kwargs after marking: {msg.additional_kwargs}")
+                        break
             except Exception as e:
                 logger.error(f"Failed to extract data for {section_id}: {e}")
                 computed_status = _status_from_output(agent_out.is_satisfied, agent_out.router_directive)
