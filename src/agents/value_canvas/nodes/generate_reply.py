@@ -153,14 +153,28 @@ async def generate_reply_node(state: ValueCanvasState, config: RunnableConfig) -
         # Final reply content
         logger.info(f"Final reply content: {reply_content[:200]}...")
 
-        # Add AI reply to conversation history
-        state["messages"].append(AIMessage(content=reply_content))
+        # Add AI reply to conversation history with section metadata
+        state["messages"].append(AIMessage(
+            content=reply_content,
+            name=state["current_section"].value,  # Use standard name field for section tracking
+            additional_kwargs={
+                "section_id": state["current_section"].value,
+                "agent_name": "value-canvas"
+            }
+        ))
 
         # Update short-term memory by appending new messages
         base_mem = state.get("short_memory", [])
         if last_human_msg is not None:
             base_mem.append(last_human_msg)
-        base_mem.append(AIMessage(content=reply_content))
+        base_mem.append(AIMessage(
+            content=reply_content,
+            name=state["current_section"].value,
+            additional_kwargs={
+                "section_id": state["current_section"].value,
+                "agent_name": "value-canvas"
+            }
+        ))
         state["short_memory"] = base_mem
 
         logger.info("DEBUG_REPLY_NODE: Reply generated successfully")
@@ -168,7 +182,15 @@ async def generate_reply_node(state: ValueCanvasState, config: RunnableConfig) -
     except Exception as e:
         logger.error(f"Failed to generate reply: {e}")
         default_reply = "Sorry, I encountered an error generating my response. Could you rephrase your question?"
-        state["messages"].append(AIMessage(content=default_reply))
-        state.setdefault("short_memory", []).append(AIMessage(content=default_reply))
+        error_message = AIMessage(
+            content=default_reply,
+            name=state["current_section"].value,
+            additional_kwargs={
+                "section_id": state["current_section"].value,
+                "agent_name": "value-canvas"
+            }
+        )
+        state["messages"].append(error_message)
+        state.setdefault("short_memory", []).append(error_message)
     
     return state

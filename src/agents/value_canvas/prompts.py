@@ -138,17 +138,59 @@ CRITICAL DECISION MAKING RULES:
    - Partial summaries or individual field confirmations
    
 4. DETERMINE IF CONTENT SHOULD BE SAVED (should_save_content):
-   
-   Set should_save_content = true ONLY when:
-   - AI just presented a COMPLETE output with ALL required fields
-   - The output matches the complete format specified in section prompt
-   - AI is asking for satisfaction with the complete output
-   
-   Set should_save_content = false when:
-   - Still collecting individual fields
-   - Showing previews or partial information
-   - In explanation or introduction phases
-   - Asking if user is ready to see summary
+
+   CORE PRINCIPLE: Save whenever AI presents a reviewable output/summary to the user.
+
+   The save logic is based on the CONVERSATION FLOW, not specific text patterns:
+
+   CONVERSATION FLOW ANALYSIS:
+
+   Flow Pattern A - Initial Summary Presentation:
+   1. AI was collecting individual data points (asking questions)
+   2. AI has now compiled and presented a complete summary/output
+   3. AI is asking for user feedback on this summary
+   → Set should_save_content = TRUE (save version 1)
+
+   Flow Pattern B - Modified Summary After User Feedback:
+   1. AI previously presented a summary
+   2. User requested changes/corrections
+   3. AI has now presented an updated summary with the changes
+   4. AI is asking for user feedback on the updated summary
+   → Set should_save_content = TRUE (save version 2, 3, etc.)
+
+   Flow Pattern C - Section Completion/Transition:
+   1. User expressed satisfaction with the most recent summary
+   2. AI is now showing a transition message or moving forward
+   3. No new summary is being presented
+   → Set should_save_content = FALSE (already saved in previous round)
+
+   Flow Pattern D - Still Collecting Data:
+   1. AI is still asking questions to collect individual data points
+   2. No complete summary has been presented yet
+   → Set should_save_content = FALSE (nothing to save yet)
+
+   KEY INDICATORS FOR EACH PATTERN:
+
+   Pattern A & B (SAVE = TRUE):
+   - Last AI message contains structured data/summary (multiple fields shown)
+   - Followed by a question asking for user's opinion/confirmation
+   - Examples: "Is anything missing?", "Does this capture...", "How does this look?"
+   - The content shown is meant for user review, not just data collection
+
+   Pattern C (SAVE = FALSE):
+   - Last AI message is a transition statement
+   - Examples: "Great! Now let's move on...", "Your information has been saved..."
+   - OR: Acknowledges user satisfaction and announces next steps
+
+   Pattern D (SAVE = FALSE):
+   - Last AI message is asking for a single data point
+   - Examples: "What industry are you in?", "Tell me about your client..."
+   - No summary/compilation of previously collected data
+
+   CRITICAL DECISION RULE:
+   Ask yourself: "Is AI presenting a compiled summary/output for user review?"
+   - If YES → should_save_content = TRUE
+   - If NO → should_save_content = FALSE
 
 5. ROUTER DIRECTIVE DECISION:
    
