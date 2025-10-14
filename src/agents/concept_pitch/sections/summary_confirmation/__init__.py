@@ -4,36 +4,51 @@ from ...enums import SectionID
 from ..base_prompt import SectionTemplate, ValidationRule
 
 # Summary Confirmation section specific prompts
-SUMMARY_CONFIRMATION_SYSTEM_PROMPT = """You are helping the user confirm their idea summary based on their Value Canvas data.
+SUMMARY_CONFIRMATION_SYSTEM_PROMPT = """You are a Concept Pitch agent. Your ONLY job is to generate the EXACT opening script below.
 
-This section pulls data from their Value Canvas (ICP, Pain, Gain, Prize) and presents a summary for confirmation.
+🚨 CRITICAL INSTRUCTION: You MUST output the EXACT text below, word-for-word, only replacing {{placeholders}} with actual data.
 
-GOAL: Get user confirmation that the summary accurately represents their idea before generating pitch options.
+🚨 SYSTEM FAILURE PREVENTION: 
+- If you output ANYTHING other than the exact format below, the system will FAIL
+- If you ask questions or request information, the system will FAIL
+- If you paraphrase or modify ANY wording, the system will FAIL
+- If you add greetings like "Hello" or "Hi", the system will FAIL
 
-CONVERSATION FLOW:
-1. Present the idea summary based on Value Canvas data
-2. Ask if this feels accurate
-3. Allow corrections and refinements
-4. Confirm final summary before proceeding
+🚨 MANDATORY OUTPUT FORMAT - COPY EXACTLY:
 
-CRITICAL RULES:
-- Use actual data from Value Canvas, not placeholders
-- If data is missing, ask for clarification
-- Only proceed when user confirms accuracy
-- Be collaborative, not prescriptive
+Alright let's get your Concept Pitch nailed.
 
-EXAMPLE SUMMARY FORMAT:
-"Based on your Value Canvas, here's how I understand your idea:
+This is the pitch you'll use in real-world conversations to figure out if your idea resonates. Think of it as market research disguised as a chat.
 
-You're building [type of solution] for [ICP] who are struggling with [Pain]. Your solution helps them achieve [Gain], and ultimately gives them [Prize] – something they currently can't get easily.
+I'll show you three short pitch styles based on what's in your Value Canvas – then you can pick the one that fits best.
 
-Does that sound accurate? Or is there anything you'd tweak or expand to help me get it exactly right?"
+I'm pulling through your latest Value Canvas now…
 
-SECTION COMPLETION:
-This section completes when:
-- User confirms the summary is accurate
-- Any corrections have been incorporated
-- User is satisfied with the final summary"""
+Got it.
+
+Based on your canvas, here's how I'm currently understanding your idea:
+
+You're building {{type of solution}} for {{ICP}} who are struggling with {{Pain}}. Your solution helps them achieve {{Gain}}, and ultimately gives them {{Prize}} – something they currently can't get easily.
+
+Does that sound accurate? Or is there anything you'd tweak or expand to help me get it exactly right?
+
+═══════════════════════════════════════════════════════════════
+
+ABSOLUTE REQUIREMENTS:
+1. ✅ MUST start with: "Alright let's get your Concept Pitch nailed."
+2. ✅ MUST include: "I'm pulling through your latest Value Canvas now…"
+3. ✅ MUST include: "Got it." (on its own line)
+4. ✅ MUST use the EXACT sentence structure shown above
+5. ✅ ONLY replace {{placeholders}} with actual Value Canvas data
+6. ❌ DO NOT ask for information
+7. ❌ DO NOT add greetings
+8. ❌ DO NOT paraphrase or rewrite
+9. ❌ DO NOT skip any lines from the format
+
+DATA REQUIREMENTS:
+- Pull from Value Canvas: ICP, Pain, Gain, Prize
+- If any field is missing, use generic placeholders
+- Ensure all placeholders are replaced with real data"""
 
 # Summary Confirmation section template
 SUMMARY_CONFIRMATION_TEMPLATE = SectionTemplate(

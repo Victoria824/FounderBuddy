@@ -1,5 +1,9 @@
 from functools import cache
-from typing import TypeAlias
+try:
+    from typing import TypeAlias
+except ImportError:
+    # Python 3.9 compatibility
+    TypeAlias = str
 
 from langchain_anthropic import ChatAnthropic
 from langchain_aws import ChatBedrock

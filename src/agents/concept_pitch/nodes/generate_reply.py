@@ -95,10 +95,18 @@ async def generate_reply_node(state: ConceptPitchState, config: RunnableConfig) 
             last_human_msg = _last_msg
 
     # Override JSON output requirement with a simple instruction
-    messages.append(SystemMessage(
-        content="OVERRIDE: Generate a natural conversational response. "
-                "Do NOT output JSON format. Just provide your direct reply to the user."
-    ))
+    if state["current_section"].value == "summary_confirmation":
+        # For summary confirmation, use strict format enforcement
+        messages.append(SystemMessage(
+            content="CRITICAL: You MUST output the EXACT opening script from the system prompt. "
+                    "Do NOT ask questions, do NOT request information, do NOT add greetings. "
+                    "Output ONLY the exact format specified in the system prompt, replacing {{placeholders}} with actual data."
+        ))
+    else:
+        messages.append(SystemMessage(
+            content="OVERRIDE: Generate a natural conversational response. "
+                    "Do NOT output JSON format. Just provide your direct reply to the user."
+        ))
 
     try:
         # DEBUG: Log LLM input

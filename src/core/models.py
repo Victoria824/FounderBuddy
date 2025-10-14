@@ -1,5 +1,9 @@
 from enum import StrEnum, auto
-from typing import TypeAlias
+try:
+    from typing import TypeAlias
+except ImportError:
+    # Python 3.9 compatibility
+    TypeAlias = str
 
 
 class Provider(StrEnum):

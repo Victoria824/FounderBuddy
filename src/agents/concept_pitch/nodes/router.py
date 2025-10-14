@@ -52,8 +52,17 @@ async def router_node(state: ConceptPitchState, config: RunnableConfig) -> Conce
         return state
     
     elif directive == RouterDirective.NEXT:
-        # Find next unfinished section
+        # Check if we're already in the correct section (decision node may have already transitioned)
         current_section_id = state["current_section"].value
+        logger.debug(f"[ROUTER] Current section: {current_section_id}, directive: {directive}")
+        
+        # If we're already in pitch_generation or later, don't transition again
+        if current_section_id in ["pitch_generation", "pitch_selection", "refinement"]:
+            logger.debug(f"[ROUTER] Already in {current_section_id}, staying put")
+            state["router_directive"] = RouterDirective.STAY
+            return state
+        
+        # Find next unfinished section
         next_section = get_next_unfinished_section(state.get("section_states", {}))
         
         if next_section:

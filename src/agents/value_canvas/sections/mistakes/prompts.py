@@ -60,28 +60,28 @@ These mistakes create lightbulb moments for your audience. They reveal the hidde
 ## Method-Based Mistakes  
 *Based on your Signature Method: {{method_name}}*
 
-### Mistake 1 (reverse engineered from Signature Method Category 1)  
-**{{principle_1}}**  
+### Mistake 1: {{mistake1_name}} 
+
 • Error in Thinking: {{error_in_thinking_1}}  
 • Error in Action: {{error_in_action_1}}  
 
-### Mistake 2 (reverse engineered from Signature Method Category 2)  
-**{{principle_2}}**  
+### Mistake 2: {{mistake2_name}} 
+
 • Error in Thinking: {{error_in_thinking_2}}  
 • Error in Action: {{error_in_action_2}}  
 
-### Mistake 3 (reverse engineered from Signature Method Category 3)  
-**{{principle_3}}**  
+### Mistake 3: {{mistake3_name}}   
+
 • Error in Thinking: {{error_in_thinking_3}}  
 • Error in Action: {{error_in_action_3}}  
 
-### Mistake 4 (reverse engineered from Signature Method Category 4)  
-**{{principle_4}}**  
+### Mistake 4: {{mistake4_name}} 
+
 • Error in Thinking: {{error_in_thinking_4}}  
 • Error in Action: {{error_in_action_4}}  
 
-### Mistake 5 (reverse engineered from Signature Method Category 5)  
-**{{principle_5}}**  
+### Mistake 5: {{mistake5_name}} 
+
 • Error in Thinking: {{error_in_thinking_5}}  
 • Error in Action: {{error_in_action_5}}  
 

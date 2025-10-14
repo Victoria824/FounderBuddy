@@ -231,6 +231,11 @@ Based on the conversation history and section context, determine:
    - Interpret their satisfaction level (satisfied/not satisfied) from their language
    - If they seem satisfied, set is_satisfied=True
    - If they seem unsatisfied or want changes, set is_satisfied=False
+   
+   🚨 CRITICAL: For SUMMARY_CONFIRMATION section:
+   - If user says "yes", "accurate", "sounds good", "correct", "that's right" → is_satisfied=True, router_directive="next"
+   - If user says "no", "not quite", "needs changes" → is_satisfied=False, router_directive="stay"
+   - User confirmation means they're ready to move to PITCH_GENERATION
 
 3. CONTENT SAVING: Should the current content be saved?
    - Set should_save_content=True when presenting a summary for user review
