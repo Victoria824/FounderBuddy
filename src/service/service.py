@@ -279,6 +279,7 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph, agent_id: str)
         langfuse_handler = CallbackHandler()
         callbacks.append(langfuse_handler)
 
+    initial_state = None
     if not thread_id:
         # This is a new conversation, so we need to initialize a new state
         if agent_id == "value-canvas":
@@ -295,12 +296,12 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph, agent_id: str)
             initial_state = await initialize_concept_pitch_state(user_id=user_id)
         else:
             raise ValueError(f"Unknown agent: {agent_id}")
-        
+
         # Get the generated thread_id from initial_state
         # For dict-like states, use .get(), for Pydantic models use direct access
         logger.info(f"DEBUG: initial_state type = {type(initial_state)}")
         logger.info(f"DEBUG: hasattr(initial_state, 'user_id') = {hasattr(initial_state, 'user_id')}")
-        
+
         if hasattr(initial_state, 'user_id'):
             user_id = initial_state.user_id
             thread_id = initial_state.thread_id
@@ -309,7 +310,7 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph, agent_id: str)
             user_id = initial_state.get("user_id")
             thread_id = initial_state.get("thread_id")
             logger.info(f"DEBUG: Got user_id={user_id}, thread_id={thread_id} from dict")
-        
+
         logger.info(f"Initialized new thread with ID: {thread_id}")
     else:
         # This is an existing conversation, so we load the state
@@ -341,22 +342,42 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph, agent_id: str)
     )
 
     # Check for interrupts that need to be resumed
+    # Extract current section for HumanMessage metadata
+    current_section = None
     if not user_input.thread_id:
         # New thread - freshly initialized state, no interrupts to resume
         # Avoid calling aget_state which might trigger unexpected graph execution
         interrupted_tasks = []
+        # Get current_section from initial_state that was just created
+        if initial_state:
+            if hasattr(initial_state, 'current_section'):
+                current_section = initial_state.current_section
+            else:
+                current_section = initial_state.get("current_section")
     else:
         # Existing thread - check if there are interrupts to resume
         state = await agent.aget_state(config=config)
         interrupted_tasks = [
             task for task in state.tasks if hasattr(task, "interrupts") and task.interrupts
         ]
+        # Extract current section from state for HumanMessage metadata
+        current_section = state.values.get("current_section") if state.values else None
 
     input: Command | dict[str, Any]
     if interrupted_tasks:
         input = Command(resume=user_input.message)
     else:
-        input = {"messages": [HumanMessage(content=user_input.message)]}
+        # Create HumanMessage with section metadata in additional_kwargs
+        additional_kwargs = {}
+        if current_section:
+            # Get the section string ID (e.g., "interview", "icp", "pain")
+            section_id_str = current_section.value if hasattr(current_section, 'value') else str(current_section)
+            additional_kwargs.update({
+                "section_id": section_id_str,
+                "agent_name": agent_id,
+            })
+
+        input = {"messages": [HumanMessage(content=user_input.message, additional_kwargs=additional_kwargs)]}
 
     kwargs = {
         "input": input,
@@ -895,20 +916,26 @@ def history(input: ChatHistoryInput) -> ChatHistory:
     """
     # Log history request
     logger.info(f"=== HISTORY_REQUEST: thread_id={input.thread_id} ===")
-    
+
     # TODO: Hard-coding DEFAULT_AGENT here is wonky
     agent: AgentGraph = get_agent(DEFAULT_AGENT)
     try:
         state_snapshot = agent.get_state(
             config=RunnableConfig(configurable={"thread_id": input.thread_id})
         )
-        messages: list[AnyMessage] = state_snapshot.values["messages"]
+
+        # Check if state exists and has messages
+        if not state_snapshot.values:
+            logger.warning(f"HISTORY_WARNING: No state found for thread_id={input.thread_id}")
+            return ChatHistory(messages=[])
+
+        messages: list[AnyMessage] = state_snapshot.values.get("messages", [])
         chat_messages: list[ChatMessage] = [langchain_to_chat_message(m) for m in messages]
-        
+
         # Log successful history response
         logger.info(f"=== HISTORY_SUCCESS: thread_id={input.thread_id} ===")
         logger.info(f"HISTORY_SUCCESS: message_count={len(chat_messages)}")
-        
+
         return ChatHistory(messages=chat_messages)
     except Exception as e:
         logger.error(f"=== HISTORY_ERROR: thread_id={input.thread_id} ===")
