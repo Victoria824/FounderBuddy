@@ -808,36 +808,13 @@ async def message_generator(
         logger.error(f"[STREAM ERROR TRACEBACK]\n{traceback.format_exc()}")
         yield f"data: {json.dumps({'type': 'error', 'content': 'Internal server error'})}\n\n"
     finally:
-        # Always send section data and check for any unsent messages at the end of the stream
+        # Always send section data at the end of the stream
         try:
             state = await agent.aget_state(config=kwargs["config"])
-            state_values = state.values if state.values else {}
-            
-            # Check for any unsent messages (especially business plan final message)
-            final_messages = state_values.get("messages", [])
-            if len(final_messages) > sent_message_count:
-                # There are messages that haven't been sent yet
-                unsent_messages = final_messages[sent_message_count:]
-                logger.info(f"[STREAM] Found {len(unsent_messages)} unsent messages, sending them now")
-                
-                for message in unsent_messages:
-                    try:
-                        # Only send AIMessages with content
-                        if isinstance(message, AIMessage) and message.content:
-                            logger.info(f"[STREAM] Sending unsent message: {type(message).__name__}, content length: {len(message.content)}")
-                            chat_message = langchain_to_chat_message(message)
-                            chat_message.run_id = str(run_id)
-                            yield f"data: {json.dumps({'type': 'message', 'content': chat_message.model_dump()})}\n\n"
-                    except Exception as e:
-                        logger.error(f"[STREAM] Error sending unsent message: {e}")
-                        logger.error(f"[STREAM] Message type: {type(message).__name__}")
-                        logger.error(f"[STREAM] Message content preview: {str(message.content)[:100] if hasattr(message, 'content') else 'N/A'}")
-            
-            # Send section data
-            if "current_section" in state_values:
-                current_section_enum = state_values["current_section"]
+            if "current_section" in state.values:
+                current_section_enum = state.values["current_section"]
                 current_section_id = current_section_enum.value  # Use the string value
-                section_state = state_values.get("section_states", {}).get(current_section_id)
+                section_state = state.values.get("section_states", {}).get(current_section_id)
                 
                 # Choose the right section templates based on agent_id
                 if agent_id == "mission-pitch":
@@ -864,9 +841,7 @@ async def message_generator(
                 }
                 yield f"data: {json.dumps({'type': 'section', 'content': section_data})}\n\n"
         except Exception as e:
-            logger.error(f"Error in stream finally block: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Error getting section data: {e}")
 
         # Log stream completion
         logger.info(f"[STREAM] Complete: agent={agent_id}, thread={kwargs['config']['configurable']['thread_id'][:8]}...")

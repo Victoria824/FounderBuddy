@@ -21,7 +21,7 @@ Guidelines:
 - Be realistic about funding needs
 - Help them think through how funding will accelerate growth
 - Discuss timeline and milestones
-- Once you have all elements, proceed directly to business plan generation
+- Once you have all elements, present a summary and ask if they're satisfied
 """,
     validation_rules=[
         ValidationRule(
