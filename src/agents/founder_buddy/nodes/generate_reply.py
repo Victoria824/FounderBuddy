@@ -25,6 +25,22 @@ async def generate_reply_node(state: FounderBuddyState, config: RunnableConfig) 
     """
     logger.info(f"Generate reply node - Section: {state['current_section']}")
     
+    # Check if conversation is finished (business plan generated)
+    if state.get("finished", False):
+        # Generate a polite message informing user that conversation is complete
+        completion_message = """Thank you for using Founder Buddy! 
+
+Your business plan has been generated and is available above. If you'd like to start a new conversation or make changes, please start a new thread.
+
+Is there anything else I can help you with regarding your business plan?"""
+        
+        ai_message = AIMessage(content=completion_message)
+        state["messages"].append(ai_message)
+        state["awaiting_user_input"] = True
+        
+        logger.info("Generated completion message for finished conversation")
+        return state
+    
     context_packet = state.get('context_packet')
     
     # Get LLM - no tools, no structured output for streaming
