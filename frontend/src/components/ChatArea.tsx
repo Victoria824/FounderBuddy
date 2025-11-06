@@ -25,7 +25,6 @@ interface ChatAreaProps {
   currentSection: Section | null;
   onThreadIdChange: (threadId: string) => void;
   onSectionUpdate: (section: Section) => void;
-  progressSidebar?: React.ReactNode;
 }
 
 export default function ChatArea({
@@ -36,8 +35,7 @@ export default function ChatArea({
   loadedMessages,
   currentSection,
   onThreadIdChange,
-  onSectionUpdate,
-  progressSidebar
+  onSectionUpdate
 }: ChatAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -454,8 +452,6 @@ export default function ChatArea({
              </p>
            )}
          </div>
-
-         {progressSidebar}
 
          {messages.length > 0 && (
            <button

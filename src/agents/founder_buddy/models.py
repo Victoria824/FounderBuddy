@@ -172,6 +172,7 @@ class FounderBuddyState(MessagesState):
     
     # Business plan
     business_plan: str | None = None
+    should_generate_business_plan: bool = False
 
 
 __all__ = [

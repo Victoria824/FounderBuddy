@@ -33,63 +33,63 @@ async def generate_business_plan_node(state: FounderBuddyState | dict, config: R
     conversation_text = ""
     for msg in messages:
         if isinstance(msg, HumanMessage):
-            conversation_text += f"用户: {msg.content}\n\n"
+            conversation_text += f"User: {msg.content}\n\n"
         elif isinstance(msg, AIMessage):
             conversation_text += f"AI: {msg.content}\n\n"
     
     # Create business plan generation prompt
     system_prompt = """You are a professional business plan writer helping founders create a comprehensive business plan document.
 
-Based on the complete conversation history, create a well-structured business plan document in Chinese that includes:
+Based on the complete conversation history, create a well-structured business plan document in English that includes:
 
-# 创业计划书
+# Business Plan
 
-## 1. 执行摘要 (Executive Summary)
-- 业务概念概述
-- 核心价值主张
-- 目标市场
+## 1. Executive Summary
+- Business concept overview
+- Core value proposition
+- Target market
 
-## 2. 使命与愿景 (Mission & Vision)
-- 使命陈述
-- 愿景陈述
-- 目标受众
+## 2. Mission & Vision
+- Mission statement
+- Vision statement
+- Target audience
 
-## 3. 产品/服务描述 (Product/Service Description)
-- 产品描述
-- 核心价值主张
-- 主要功能特性
-- 差异化优势
+## 3. Product/Service Description
+- Product description
+- Core value proposition
+- Key features
+- Differentiation advantages
 
-## 4. 团队与进展 (Team & Traction)
-- 团队成员及角色
-- 关键里程碑
-- 进展指标
+## 4. Team & Traction
+- Team members and roles
+- Key milestones
+- Traction metrics
 
-## 5. 融资计划 (Investment Plan)
-- 融资金额
-- 资金用途
-- 估值
-- 退出策略
+## 5. Investment Plan
+- Funding amount
+- Funding use
+- Valuation
+- Exit strategy
 
-## 6. 下一步行动 (Next Steps)
-- 立即行动项
-- 关键里程碑
+## 6. Next Steps
+- Immediate action items
+- Key milestones
 
-要求：
-- 使用Markdown格式，结构清晰
-- 内容全面但简洁，控制在2-3页
-- 基于对话中的实际信息，不要使用占位符
-- 使用专业但易懂的语言
-- 确保所有信息都来自对话内容"""
+Requirements:
+- Use Markdown format with clear structure
+- Content should be comprehensive but concise, approximately 2-3 pages
+- Base all information on actual conversation content, do not use placeholders
+- Use professional but accessible language
+- Ensure all information comes from the conversation content"""
 
     messages_for_llm = [
         SystemMessage(content=system_prompt),
         SystemMessage(content=f"""
-完整对话历史：
+Complete conversation history:
 
 {conversation_text}
 
-请基于以上对话内容，生成一份完整的创业计划书。确保所有信息都来自对话中的实际内容。
+Please generate a complete business plan based on the above conversation content. Ensure all information comes from the actual conversation content.
 """)
     ]
     
@@ -103,9 +103,9 @@ Based on the complete conversation history, create a well-structured business pl
     state["business_plan"] = business_plan_content
     
     # Create final message with business plan
-    final_message = f"""# 🎉 创业计划书已生成
+    final_message = f"""# 🎉 Business Plan Generated
 
-感谢您完成所有section！以下是基于您的对话生成的完整创业计划书：
+Thank you for completing all sections! Below is your complete business plan based on our conversation:
 
 ---
 
@@ -113,20 +113,22 @@ Based on the complete conversation history, create a well-structured business pl
 
 ---
 
-**下一步建议：**
-1. 仔细审阅这份计划书
-2. 根据实际情况进行调整和完善
-3. 开始执行计划中的下一步行动
+**Next Steps:**
+1. Review this business plan carefully
+2. Adjust and refine based on your actual situation
+3. Begin executing the action items outlined in the plan
 
-祝您的创业项目顺利！🚀"""
+Best of luck with your venture! 🚀"""
     
     # Add final message
     state["messages"].append(AIMessage(content=final_message))
     
-    # Mark as finished
+    # Mark as finished and clear the flag
     state["finished"] = True
+    state["should_generate_business_plan"] = False
     
     logger.info("Business plan generated successfully")
+    logger.info(f"Final message added to state with content length: {len(final_message)}")
     
     return state
 

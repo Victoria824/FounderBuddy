@@ -8,6 +8,14 @@ from ..enums import RouterDirective
 from ..models import FounderBuddyState
 
 
+def route_after_memory_updater(state: FounderBuddyState) -> Literal["generate_business_plan", "router"]:
+    """Route after memory_updater to determine if we should generate business plan."""
+    # Check if we should generate business plan
+    if state.get("should_generate_business_plan", False):
+        return "generate_business_plan"
+    return "router"
+
+
 def route_decision(state: FounderBuddyState) -> Literal["generate_reply"] | None:
     """Determine the next node to go to based on current state."""
     # All sections complete → End

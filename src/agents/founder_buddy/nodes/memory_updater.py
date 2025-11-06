@@ -116,7 +116,7 @@ async def memory_updater_node(state: FounderBuddyState, config: RunnableConfig) 
         done_keywords = ["satisfied", "done", "finished", "complete", "good", "right", "proceed", "think i'm satisfied"]
         user_done = any(keyword in str(last_user_msg) for keyword in done_keywords) if last_user_msg else False
     
-    # Generate business plan if:
+    # Check if we should generate business plan (set flag for router to handle)
     # 1. All sections are marked as DONE, OR
     # 2. We're in the last section and user said they're satisfied
     should_generate_plan = (
@@ -125,9 +125,10 @@ async def memory_updater_node(state: FounderBuddyState, config: RunnableConfig) 
     ) and not state.get("business_plan")
     
     if should_generate_plan:
-        logger.info("All sections complete and user satisfied - generating business plan")
-        from .generate_business_plan import generate_business_plan_node
-        state = await generate_business_plan_node(state, config)
+        logger.info("All sections complete and user satisfied - setting flag to generate business plan")
+        state["should_generate_business_plan"] = True
+    else:
+        state["should_generate_business_plan"] = False
     
     # Manage short_memory size (keep last 10 messages)
     short_memory = state.get("short_memory", [])

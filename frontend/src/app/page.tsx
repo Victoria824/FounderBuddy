@@ -115,9 +115,9 @@ export default function Chat() {
         </>
       )}
 
-      {/* Left Sidebar - Chat History */}
+      {/* Left Sidebar - Progress & Chat History */}
       <div style={{
-        width: '280px',
+        width: '320px',
         height: '100vh',
         backgroundColor: '#f8fafc',
         borderRight: '1px solid #e2e8f0',
@@ -162,6 +162,20 @@ export default function Chat() {
           </button>
         </div>
 
+        {/* Progress Sidebar - Only show for founder-buddy */}
+        {selectedAgent === 'founder-buddy' && (
+          <div style={{
+            padding: '16px',
+            borderBottom: '1px solid #e2e8f0',
+            backgroundColor: 'white'
+          }}>
+            <ProgressSidebar
+              currentSection={currentSection}
+              selectedAgent={selectedAgent}
+            />
+          </div>
+        )}
+
         {/* Chat History */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <ConversationHistory
@@ -182,12 +196,6 @@ export default function Chat() {
         currentSection={currentSection}
         onThreadIdChange={handleThreadIdChange}
         onSectionUpdate={handleSectionUpdate}
-        progressSidebar={
-          <ProgressSidebar
-            currentSection={currentSection}
-            selectedAgent={selectedAgent}
-          />
-        }
       />
 
       {/* Right Sidebar - Section Display Panel */}
