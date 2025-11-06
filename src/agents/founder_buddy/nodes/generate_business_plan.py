@@ -21,24 +21,25 @@ async def generate_business_plan_node(state: FounderBuddyState | dict, config: R
     """
     logger.info("Generating business plan document")
     
-    # Handle both dict and FounderBuddyState types
-    if isinstance(state, dict):
-        messages = state.get("messages", [])
-        founder_data = state.get("founder_data", {})
-    else:
-        messages = state.get("messages", [])
-        founder_data = state.get("founder_data", {})
-    
-    # Extract conversation history as text
-    conversation_text = ""
-    for msg in messages:
-        if isinstance(msg, HumanMessage):
-            conversation_text += f"User: {msg.content}\n\n"
-        elif isinstance(msg, AIMessage):
-            conversation_text += f"AI: {msg.content}\n\n"
-    
-    # Create business plan generation prompt
-    system_prompt = """You are a professional business plan writer helping founders create a comprehensive business plan document.
+    try:
+        # Handle both dict and FounderBuddyState types
+        if isinstance(state, dict):
+            messages = state.get("messages", [])
+            founder_data = state.get("founder_data", {})
+        else:
+            messages = state.get("messages", [])
+            founder_data = state.get("founder_data", {})
+        
+        # Extract conversation history as text
+        conversation_text = ""
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                conversation_text += f"User: {msg.content}\n\n"
+            elif isinstance(msg, AIMessage):
+                conversation_text += f"AI: {msg.content}\n\n"
+        
+        # Create business plan generation prompt
+        system_prompt = """You are a professional business plan writer helping founders create a comprehensive business plan document.
 
 Based on the complete conversation history, create a well-structured business plan document in English that includes:
 
@@ -82,28 +83,28 @@ Requirements:
 - Use professional but accessible language
 - Ensure all information comes from the conversation content"""
 
-    messages_for_llm = [
-        SystemMessage(content=system_prompt),
-        SystemMessage(content=f"""
+        messages_for_llm = [
+            SystemMessage(content=system_prompt),
+            SystemMessage(content=f"""
 Complete conversation history:
 
 {conversation_text}
 
 Please generate a complete business plan based on the above conversation content. Ensure all information comes from the actual conversation content.
 """)
-    ]
-    
-    # Generate business plan
-    llm = get_model()
-    response = await llm.ainvoke(messages_for_llm)
-    
-    business_plan_content = response.content if hasattr(response, 'content') else str(response)
-    
-    # Add business plan to state
-    state["business_plan"] = business_plan_content
-    
-    # Create final message with business plan
-    final_message = f"""# 🎉 Business Plan Generated
+        ]
+        
+        # Generate business plan
+        llm = get_model()
+        response = await llm.ainvoke(messages_for_llm)
+        
+        business_plan_content = response.content if hasattr(response, 'content') else str(response)
+        
+        # Add business plan to state
+        state["business_plan"] = business_plan_content
+        
+        # Create final message with business plan
+        final_message = f"""# 🎉 Business Plan Generated
 
 Thank you for completing all sections! Below is your complete business plan based on our conversation:
 
@@ -119,16 +120,26 @@ Thank you for completing all sections! Below is your complete business plan base
 3. Begin executing the action items outlined in the plan
 
 Best of luck with your venture! 🚀"""
-    
-    # Add final message
-    state["messages"].append(AIMessage(content=final_message))
-    
-    # Mark as finished and clear the flag
-    state["finished"] = True
-    state["should_generate_business_plan"] = False
-    
-    logger.info("Business plan generated successfully")
-    logger.info(f"Final message added to state with content length: {len(final_message)}")
+        
+        # Add final message
+        state["messages"].append(AIMessage(content=final_message))
+        
+        # Mark as finished and clear the flag
+        state["finished"] = True
+        state["should_generate_business_plan"] = False
+        
+        logger.info("Business plan generated successfully")
+        logger.info(f"Final message added to state with content length: {len(final_message)}")
+        
+    except Exception as e:
+        logger.error(f"Error generating business plan: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Add error message to state
+        error_message = "I apologize, but there was an error generating your business plan. Please try again or contact support."
+        state["messages"].append(AIMessage(content=error_message))
+        state["finished"] = True
+        state["should_generate_business_plan"] = False
     
     return state
 

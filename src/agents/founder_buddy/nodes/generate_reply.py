@@ -26,7 +26,39 @@ async def generate_reply_node(state: FounderBuddyState, config: RunnableConfig) 
     logger.info(f"Generate reply node - Section: {state['current_section']}")
     
     # Check if conversation is finished (business plan generated)
-    if state.get("finished", False):
+    if state.get("finished", False) or state.get("business_plan"):
+        # Check if business plan message already exists in messages
+        messages = state.get("messages", [])
+        has_business_plan_message = any(
+            isinstance(msg, AIMessage) and 
+            ("business plan generated" in msg.content.lower() or "🎉" in msg.content)
+            for msg in messages
+        )
+        
+        if not has_business_plan_message:
+            # Business plan was generated but message not sent yet - send it now
+            business_plan = state.get("business_plan", "")
+            if business_plan:
+                final_message = f"""# 🎉 Business Plan Generated
+
+Thank you for completing all sections! Below is your complete business plan based on our conversation:
+
+---
+
+{business_plan}
+
+---
+
+**Next Steps:**
+1. Review this business plan carefully
+2. Adjust and refine based on your actual situation
+3. Begin executing the action items outlined in the plan
+
+Best of luck with your venture! 🚀"""
+                ai_message = AIMessage(content=final_message)
+                state["messages"].append(ai_message)
+                logger.info("Added business plan message to conversation")
+        
         # Generate a polite message informing user that conversation is complete
         completion_message = """Thank you for using Founder Buddy! 
 
@@ -57,13 +89,16 @@ Is there anything else I can help you with regarding your business plan?"""
             user_confirmed = any(word in user_content for word in satisfaction_words)
             
             # Check if AI showed summary (expanded detection)
+            # Match patterns like "Does this feel right", "Does this summary feel right", "Here's a summary", etc.
             ai_showed_summary = (
                 "summary" in ai_content or 
                 "does this feel right" in ai_content or
                 "does this summary" in ai_content or
                 "here's a summary" in ai_content or
                 "here is a summary" in ai_content or
-                "summary of your" in ai_content
+                "summary of your" in ai_content or
+                "feel right to you" in ai_content or
+                "does this summary feel right" in ai_content
             )
             
             # Check if we're in the last section

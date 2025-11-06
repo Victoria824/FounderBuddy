@@ -32,6 +32,12 @@ async def router_node(state: FounderBuddyState, config: RunnableConfig) -> Found
     - Call get_context when changing sections
     - Check for completion and set finished flag
     """
+    # If business plan is generated or conversation is finished, don't route to new sections
+    if state.get("finished", False) or state.get("business_plan"):
+        logger.info("[ROUTER] Business plan generated or conversation finished - staying in current state")
+        state["router_directive"] = RouterDirective.STAY
+        return state
+    
     msgs = state.get("messages", [])
     if msgs and len(msgs) >= 2:
         last_msg = msgs[-1]
