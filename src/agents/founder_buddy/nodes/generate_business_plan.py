@@ -102,10 +102,39 @@ Please generate a complete business plan based on the above conversation content
     # Add business plan to state
     state["business_plan"] = business_plan_content
     
+    # Get the last AI message to append business plan to it
+    messages = state.get("messages", [])
+    last_ai_message = None
+    last_ai_index = -1
+    for i in range(len(messages) - 1, -1, -1):
+        if isinstance(messages[i], AIMessage):
+            last_ai_message = messages[i]
+            last_ai_index = i
+            break
+    
     # Create final message with business plan
-    final_message = f"""# 🎉 Business Plan Generated
+    # Format: insert business plan into the completion message
+    if last_ai_message and ("covered all the sections" in last_ai_message.content.lower() or 
+                            "we've covered all" in last_ai_message.content.lower()):
+        # Check if message already has "If there's anything else" part
+        original_content = last_ai_message.content
+        if "if there's anything else" in original_content.lower():
+            # Split at "If there's anything else" and insert business plan before it
+            parts = original_content.split("If there's anything else", 1)
+            if len(parts) == 2:
+                completion_part = parts[0].strip()
+                ending_part = "If there's anything else" + parts[1]
+            else:
+                completion_part = original_content
+                ending_part = "\n\nIf there's anything else you want to revisit or refine, let me know."
+        else:
+            completion_part = original_content
+            ending_part = "\n\nIf there's anything else you want to revisit or refine, let me know."
+        
+        # Create final message with business plan inserted
+        final_message = f"""{completion_part}
 
-Thank you for completing all sections! Below is your complete business plan based on our conversation:
+Here's the business plan:
 
 ---
 
@@ -113,15 +142,24 @@ Thank you for completing all sections! Below is your complete business plan base
 
 ---
 
-**Next Steps:**
-1. Review this business plan carefully
-2. Adjust and refine based on your actual situation
-3. Begin executing the action items outlined in the plan
+{ending_part}"""
+        
+        # Replace the last AI message instead of appending a new one
+        state["messages"][last_ai_index] = AIMessage(content=final_message)
+    else:
+        # Fallback: create new message if we can't find the completion message
+        final_message = f"""Great. With the investment plan clarified, we've covered all the sections. Here's the business plan:
 
-Best of luck with your venture! 🚀"""
-    
-    # Add final message
-    state["messages"].append(AIMessage(content=final_message))
+---
+
+{business_plan_content}
+
+---
+
+If there's anything else you want to revisit or refine, let me know."""
+        
+        # Add final message
+        state["messages"].append(AIMessage(content=final_message))
     
     # Mark as finished and clear the flag
     state["finished"] = True

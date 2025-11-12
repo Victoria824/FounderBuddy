@@ -58,11 +58,11 @@ async def generate_decision_node(state: FounderBuddyState, config: RunnableConfi
     is_last_section = current_section == SectionID.INVEST_PLAN if hasattr(current_section, 'value') else str(current_section) == "invest_plan"
     
     # Enhanced satisfaction detection
-    satisfaction_words = ["yes", "good", "great", "perfect", "continue", "next", "satisfied", "looks good", "right", "proceed", "done", "finished", "complete"]
+    satisfaction_words = ["yes", "good", "great", "perfect", "continue", "next", "satisfied", "looks good", "right", "proceed", "done", "finished", "complete", "that's good", "that is good", "sounds good"]
     is_satisfied = any(word in last_user_msg for word in satisfaction_words) if last_user_msg else None
     
     # Special handling for completion signals
-    completion_words = ["satisfied", "done", "finished", "complete", "good", "right"]
+    completion_words = ["satisfied", "done", "finished", "complete", "good", "right", "yes", "that's good", "that is good", "sounds good", "looks good"]
     is_completion_signal = any(word in last_user_msg for word in completion_words) if last_user_msg else False
     
     # Determine router directive

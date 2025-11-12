@@ -113,16 +113,36 @@ async def memory_updater_node(state: FounderBuddyState, config: RunnableConfig) 
                 last_user_msg = msg.content.lower() if hasattr(msg, 'content') else ""
                 break
         
-        done_keywords = ["satisfied", "done", "finished", "complete", "good", "right", "proceed", "think i'm satisfied"]
+        done_keywords = ["satisfied", "done", "finished", "complete", "good", "right", "proceed", "think i'm satisfied", "yes", "that's good", "that is good", "sounds good", "looks good"]
         user_done = any(keyword in str(last_user_msg) for keyword in done_keywords) if last_user_msg else False
+        
+        # Check if user explicitly requests business plan
+        plan_request_keywords = ["show me", "show the", "generate", "create", "give me", "full plan", "business plan", "complete plan"]
+        user_requested_plan = any(keyword in str(last_user_msg) for keyword in plan_request_keywords) if last_user_msg else False
+    
+    # Also check agent_output for satisfaction (more reliable)
+    if agent_out and agent_out.is_satisfied:
+        user_done = True
     
     # Check if we should generate business plan (set flag for router to handle)
     # 1. All sections are marked as DONE, OR
     # 2. We're in the last section and user said they're satisfied
-    should_generate_plan = (
-        (all_complete and user_done) or 
-        (is_last_section and user_done)
-    ) and not state.get("business_plan")
+    # 3. We're in the last section, user confirmed summary, and invest_plan is DONE
+    invest_plan_done = (
+        SectionID.INVEST_PLAN.value in section_states and 
+        section_states[SectionID.INVEST_PLAN.value].status == SectionStatus.DONE
+    )
+    
+    # If user explicitly requests business plan, generate it (even if not all sections are DONE)
+    if user_requested_plan and is_last_section and invest_plan_done:
+        logger.info("User explicitly requested business plan - generating it")
+        should_generate_plan = True
+    else:
+        should_generate_plan = (
+            (all_complete and user_done) or 
+            (is_last_section and user_done and invest_plan_done) or
+            (is_last_section and user_done and agent_out and agent_out.is_satisfied)
+        ) and not state.get("business_plan")
     
     if should_generate_plan:
         logger.info("All sections complete and user satisfied - setting flag to generate business plan")
