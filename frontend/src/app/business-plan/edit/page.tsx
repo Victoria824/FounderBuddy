@@ -206,6 +206,11 @@ export default function EditBusinessPlanPage() {
 
       // Debounce: save after 1 second of no changes
       const timeoutId = setTimeout(async () => {
+        if (!supabase || !threadId) {
+          console.warn('Cannot save: missing supabase or threadId');
+          return;
+        }
+
         try {
           setSaving(true);
           setError(null);

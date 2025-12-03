@@ -282,6 +282,11 @@ export default function BusinessPlanEditor({
 
       // Debounce: save after 1 second of no changes
       saveTimeoutRef.current = setTimeout(async () => {
+        if (!supabase || !threadId) {
+          console.warn('Cannot save: missing supabase or threadId');
+          return;
+        }
+
         try {
           isSavingRef.current = true;
           setSaving(true);
